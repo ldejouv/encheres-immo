@@ -33,29 +33,28 @@ def render():
 
     st.divider()
 
-    # Filters
-    with st.sidebar:
-        st.subheader("Filtres")
+    # Filters — inline in central panel
+    df_all = metrics.get_upcoming_listings()
 
-        # Get unique values for filters
-        df_all = metrics.get_upcoming_listings()
+    with st.expander("Filtres", expanded=False):
+        fc1, fc2, fc3 = st.columns(3)
+        with fc1:
+            departments = sorted(df_all["department_code"].dropna().unique().tolist())
+            selected_depts = st.multiselect("Departements", departments, key="up_depts")
+        with fc2:
+            regions = sorted(df_all["region"].dropna().unique().tolist())
+            selected_regions = st.multiselect("Regions", regions, key="up_regions")
+        with fc3:
+            types = sorted(df_all["property_type"].dropna().unique().tolist())
+            selected_types = st.multiselect("Types de bien", types, key="up_types")
 
-        departments = sorted(df_all["department_code"].dropna().unique().tolist())
-        selected_depts = st.multiselect("Departements", departments)
-
-        regions = sorted(df_all["region"].dropna().unique().tolist())
-        selected_regions = st.multiselect("Regions", regions)
-
-        types = sorted(df_all["property_type"].dropna().unique().tolist())
-        selected_types = st.multiselect("Types de bien", types)
-
-        price_range = st.slider(
-            "Prix (EUR)",
-            min_value=0,
-            max_value=int(df_all["mise_a_prix"].max() or 1_000_000),
-            value=(0, int(df_all["mise_a_prix"].max() or 1_000_000)),
-            step=10_000,
-        )
+        price_max_val = int(df_all["mise_a_prix"].max() or 1_000_000)
+        pc1, pc2 = st.columns(2)
+        with pc1:
+            price_min = st.number_input("Prix min (EUR)", min_value=0, max_value=price_max_val, value=0, step=10_000, key="up_pmin")
+        with pc2:
+            price_max = st.number_input("Prix max (EUR)", min_value=0, max_value=price_max_val, value=price_max_val, step=10_000, key="up_pmax")
+        price_range = (price_min, price_max)
 
     # Apply filters
     filters = {}

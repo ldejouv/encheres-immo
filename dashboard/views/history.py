@@ -10,6 +10,7 @@ import plotly.express as px
 import plotly.graph_objects as go
 import pandas as pd
 import numpy as np
+from datetime import datetime, date
 
 from analysis.metrics import AuctionMetrics
 from db.database import Database
@@ -56,67 +57,102 @@ def render():
         )
         return
 
-    # ── Sidebar filters ──────────────────────────────────────────────
-    with st.sidebar:
-        st.subheader("Filtres historique")
+    # ── Filters — in the central panel ────────────────────────────────
+    with st.expander("Filtres", expanded=True):
+        # Row 1: categorical filters
+        fc1, fc2, fc3, fc4 = st.columns(4)
+        with fc1:
+            sel_statuses = st.multiselect(
+                "Resultat",
+                opts["result_statuses"],
+                format_func=lambda s: STATUS_LABELS.get(s, s),
+                key="hist_statuses",
+            )
+        with fc2:
+            sel_depts = st.multiselect("Departements", opts["departments"], key="hist_depts")
+        with fc3:
+            sel_types = st.multiselect("Types de bien", opts["property_types"], key="hist_types")
+        with fc4:
+            sel_tribunals = st.multiselect("Tribunaux", opts["tribunal_names"], key="hist_tribunals")
 
-        sel_statuses = st.multiselect(
-            "Resultat",
-            opts["result_statuses"],
-            format_func=lambda s: STATUS_LABELS.get(s, s),
-        )
-
-        sel_depts = st.multiselect("Departements", opts["departments"])
-
-        sel_types = st.multiselect("Types de bien", opts["property_types"])
-
-        sel_tribunals = st.multiselect("Tribunaux", opts["tribunal_names"])
-
-        sel_regions = st.multiselect("Regions", opts["regions"])
+        fc5, fc6 = st.columns(2)
+        with fc5:
+            sel_regions = st.multiselect("Regions", opts["regions"], key="hist_regions")
+        with fc6:
+            city_search = st.text_input(
+                "Recherche ville",
+                placeholder="ex: Paris, Versailles",
+                key="hist_city",
+            )
 
         st.markdown("---")
-        st.markdown("**Mise a prix**")
-        price_range = st.slider(
-            "Plage mise a prix (EUR)",
-            min_value=0,
-            max_value=max(int(opts["max_mise_a_prix"]), 100_000),
-            value=(0, max(int(opts["max_mise_a_prix"]), 100_000)),
-            step=10_000,
-            key="hist_price_range",
-        )
+
+        # Row 2: price filters with manual input
+        st.markdown("**Mise a prix (EUR)**")
+        _max_map = max(int(opts["max_mise_a_prix"]), 100_000)
+        pm1, pm2 = st.columns(2)
+        with pm1:
+            map_min = st.number_input("Min", min_value=0, max_value=_max_map, value=0, step=10_000, key="hist_map_min")
+        with pm2:
+            map_max = st.number_input("Max", min_value=0, max_value=_max_map, value=_max_map, step=10_000, key="hist_map_max")
 
         if opts["max_final_price"] and opts["max_final_price"] > 0:
-            st.markdown("**Prix final**")
-            final_range = st.slider(
-                "Plage prix final (EUR)",
-                min_value=0,
-                max_value=max(int(opts["max_final_price"]), 100_000),
-                value=(0, max(int(opts["max_final_price"]), 100_000)),
-                step=10_000,
-                key="hist_final_range",
-            )
+            st.markdown("**Prix final (EUR)**")
+            _max_final = max(int(opts["max_final_price"]), 100_000)
+            pf1, pf2 = st.columns(2)
+            with pf1:
+                final_min = st.number_input("Min", min_value=0, max_value=_max_final, value=0, step=10_000, key="hist_final_min")
+            with pf2:
+                final_max = st.number_input("Max", min_value=0, max_value=_max_final, value=_max_final, step=10_000, key="hist_final_max")
+            final_range = (final_min, final_max)
         else:
             final_range = None
 
+        # Prix / m2 filter
+        st.markdown("**Prix / m2 (EUR)**")
+        pm2_1, pm2_2 = st.columns(2)
+        with pm2_1:
+            prix_m2_min = st.number_input("Min", min_value=0, value=0, step=100, key="hist_pm2_min")
+        with pm2_2:
+            prix_m2_max = st.number_input("Max", min_value=0, value=0, step=100, key="hist_pm2_max",
+                                          help="Laisser a 0 pour ne pas filtrer")
+
+        # Surface filter
         _max_surf = opts.get("max_surface") or 0
         if _max_surf > 0:
-            st.markdown("**Surface**")
-            surface_range = st.slider(
-                "Plage surface (m²)",
-                min_value=0,
-                max_value=max(int(_max_surf), 100),
-                value=(0, max(int(_max_surf), 100)),
-                step=10,
-                key="hist_surface_range",
-            )
+            st.markdown("**Surface (m2)**")
+            sf1, sf2 = st.columns(2)
+            with sf1:
+                surf_min = st.number_input("Min", min_value=0, max_value=max(int(_max_surf), 100), value=0, step=10, key="hist_surf_min")
+            with sf2:
+                surf_max = st.number_input("Max", min_value=0, max_value=max(int(_max_surf), 100), value=max(int(_max_surf), 100), step=10, key="hist_surf_max")
+            surface_range = (surf_min, surf_max)
         else:
             surface_range = None
 
-        # Free-text city search
-        city_search = st.text_input(
-            "Recherche ville",
-            placeholder="ex: Paris, Versailles",
-        )
+        st.markdown("---")
+
+        # Date range filter
+        st.markdown("**Plage de dates**")
+        dt1, dt2 = st.columns(2)
+        with dt1:
+            date_from = st.date_input("Du", value=None, key="hist_date_from")
+        with dt2:
+            date_to = st.date_input("Au", value=None, key="hist_date_to")
+
+        st.markdown("---")
+
+        # Exclusion checkboxes
+        st.markdown("**Exclure les annonces avec donnees manquantes**")
+        ex1, ex2, ex3, ex4 = st.columns(4)
+        with ex1:
+            excl_no_surface = st.checkbox("Sans surface", key="hist_excl_surf")
+        with ex2:
+            excl_no_final = st.checkbox("Sans prix final", key="hist_excl_final")
+        with ex3:
+            excl_no_price = st.checkbox("Sans mise a prix", key="hist_excl_map")
+        with ex4:
+            excl_no_pm2 = st.checkbox("Sans prix/m2", key="hist_excl_pm2")
 
     # ── Build filters ─────────────────────────────────────────────────
     filters = {}
@@ -130,13 +166,13 @@ def render():
         filters["tribunal_names"] = sel_tribunals
     if sel_regions:
         filters["regions"] = sel_regions
-    if price_range[0] > 0:
-        filters["min_price"] = price_range[0]
-    if price_range[1] < int(opts["max_mise_a_prix"]):
-        filters["max_price"] = price_range[1]
+    if map_min > 0:
+        filters["min_price"] = map_min
+    if map_max < _max_map:
+        filters["max_price"] = map_max
     if final_range and final_range[0] > 0:
         filters["min_final"] = final_range[0]
-    if final_range and final_range[1] < int(opts["max_final_price"]):
+    if final_range and final_range[1] < max(int(opts["max_final_price"]), 100_000):
         filters["max_final"] = final_range[1]
     if surface_range and surface_range[0] > 0:
         filters["min_surface"] = surface_range[0]
@@ -159,6 +195,30 @@ def render():
         df["final_price"] / df["surface_m2"],
         np.nan,
     )
+
+    # ── Apply client-side filters (prix/m2, dates, exclusions) ────────
+    if prix_m2_min > 0:
+        df = df[(df["prix_m2"].isna()) | (df["prix_m2"] >= prix_m2_min)]
+    if prix_m2_max > 0:
+        df = df[(df["prix_m2"].isna()) | (df["prix_m2"] <= prix_m2_max)]
+
+    if date_from:
+        df = df[(df["result_date"].isna()) | (df["result_date"] >= str(date_from))]
+    if date_to:
+        df = df[(df["result_date"].isna()) | (df["result_date"] <= str(date_to))]
+
+    if excl_no_surface:
+        df = df[df["surface_m2"].notna() & (df["surface_m2"] > 0)]
+    if excl_no_final:
+        df = df[df["final_price"].notna() & (df["final_price"] > 0)]
+    if excl_no_price:
+        df = df[df["mise_a_prix"].notna() & (df["mise_a_prix"] > 0)]
+    if excl_no_pm2:
+        df = df[df["prix_m2"].notna() & (df["prix_m2"] > 0)]
+
+    if df.empty:
+        st.warning("Aucun resultat apres application des filtres avances.")
+        return
 
     # ── KPIs ──────────────────────────────────────────────────────────
     total = len(df)
@@ -251,34 +311,30 @@ def render():
             else:
                 ratio_range = None
 
-        # Price range filters
+        # Price range filters with manual input
         qf7, qf8 = st.columns(2)
         with qf7:
             map_vals = df["mise_a_prix"].dropna()
             if not map_vals.empty and map_vals.max() > 0:
-                map_max = int(map_vals.max())
-                tbl_map_range = st.slider(
-                    "Mise a prix (EUR)",
-                    min_value=0,
-                    max_value=map_max,
-                    value=(0, map_max),
-                    step=10_000,
-                    key="tbl_map_range",
-                )
+                _tbl_map_max = int(map_vals.max())
+                tm1, tm2 = st.columns(2)
+                with tm1:
+                    tbl_map_min = st.number_input("MAP min", min_value=0, max_value=_tbl_map_max, value=0, step=10_000, key="tbl_map_min")
+                with tm2:
+                    tbl_map_max = st.number_input("MAP max", min_value=0, max_value=_tbl_map_max, value=_tbl_map_max, step=10_000, key="tbl_map_max")
+                tbl_map_range = (tbl_map_min, tbl_map_max)
             else:
                 tbl_map_range = None
         with qf8:
             final_vals = df["final_price"].dropna()
             if not final_vals.empty and final_vals.max() > 0:
-                final_max = int(final_vals.max())
-                tbl_final_range = st.slider(
-                    "Prix d'adjudication (EUR)",
-                    min_value=0,
-                    max_value=final_max,
-                    value=(0, final_max),
-                    step=10_000,
-                    key="tbl_final_range",
-                )
+                _tbl_final_max = int(final_vals.max())
+                tf1, tf2 = st.columns(2)
+                with tf1:
+                    tbl_final_min = st.number_input("Prix final min", min_value=0, max_value=_tbl_final_max, value=0, step=10_000, key="tbl_final_min")
+                with tf2:
+                    tbl_final_max = st.number_input("Prix final max", min_value=0, max_value=_tbl_final_max, value=_tbl_final_max, step=10_000, key="tbl_final_max")
+                tbl_final_range = (tbl_final_min, tbl_final_max)
             else:
                 tbl_final_range = None
 
@@ -287,19 +343,17 @@ def render():
         with qf9:
             surf_vals = df["surface_m2"].dropna()
             if not surf_vals.empty and surf_vals.max() > 0:
-                surf_max = int(surf_vals.max())
-                tbl_surface_range = st.slider(
-                    "Surface (m²)",
-                    min_value=0,
-                    max_value=surf_max,
-                    value=(0, surf_max),
-                    step=10,
-                    key="tbl_surface_range",
-                )
+                _tbl_surf_max = int(surf_vals.max())
+                ts1, ts2 = st.columns(2)
+                with ts1:
+                    tbl_surf_min = st.number_input("Surface min (m2)", min_value=0, max_value=_tbl_surf_max, value=0, step=10, key="tbl_surf_min")
+                with ts2:
+                    tbl_surf_max = st.number_input("Surface max (m2)", min_value=0, max_value=_tbl_surf_max, value=_tbl_surf_max, step=10, key="tbl_surf_max")
+                tbl_surface_range = (tbl_surf_min, tbl_surf_max)
             else:
                 tbl_surface_range = None
 
-        # Apply inline filters on the already-sidebar-filtered dataframe
+        # Apply inline filters on the already-filtered dataframe
         df_tab = df.copy()
         if tbl_search.strip():
             search_lower = tbl_search.strip().lower()
@@ -344,9 +398,9 @@ def render():
             "Date de resultat": "result_date",
             "Mise a prix": "mise_a_prix",
             "Prix final": "final_price",
-            "Prix/m²": "prix_m2",
+            "Prix/m2": "prix_m2",
             "Ratio final/MAP": "ratio",
-            "Surface (m²)": "surface_m2",
+            "Surface (m2)": "surface_m2",
             "Ville": "city",
             "Departement": "department_code",
             "Type de bien": "property_type",
@@ -389,10 +443,10 @@ def render():
             "city": "Ville",
             "department_code": "Dept",
             "property_type": "Type",
-            "surface_m2": "Surface (m²)",
+            "surface_m2": "Surface (m2)",
             "mise_a_prix": "Mise a prix",
             "final_price": "Prix final",
-            "prix_m2": "Prix/m²",
+            "prix_m2": "Prix/m2",
             "ratio": "Ratio",
             "label_status": "Resultat",
             "result_date": "Date",
@@ -401,17 +455,15 @@ def render():
         }
         df_show = df_show.rename(columns=col_names)
 
-        # Keep numeric data as-is — use column_config for formatting
-        # so that Streamlit sorts on the actual numbers, not strings.
+        # Full-width table without fixed height
         st.dataframe(
             df_show,
-            width="stretch",
+            use_container_width=True,
             hide_index=True,
-            height=500,
             column_config={
-                "Surface (m²)": st.column_config.NumberColumn(
-                    "Surface (m²)",
-                    format="%.1f m²",
+                "Surface (m2)": st.column_config.NumberColumn(
+                    "Surface (m2)",
+                    format="%.1f m2",
                     help="Surface du bien en metres carres",
                 ),
                 "Mise a prix": st.column_config.NumberColumn(
@@ -424,9 +476,9 @@ def render():
                     format="euro",
                     help="Prix d'adjudication",
                 ),
-                "Prix/m²": st.column_config.NumberColumn(
-                    "Prix/m²",
-                    format="%.0f €/m²",
+                "Prix/m2": st.column_config.NumberColumn(
+                    "Prix/m2",
+                    format="%.0f EUR/m2",
                     help="Prix d'adjudication divise par la surface",
                 ),
                 "Ratio": st.column_config.NumberColumn(
@@ -443,43 +495,6 @@ def render():
         )
 
         st.caption(f"{len(df_show)} resultats affiches sur {total} au total")
-
-        # ── Detail panel ──────────────────────────────────────────────
-        st.divider()
-        st.subheader("Detail d'un bien")
-        if not df_sorted.empty:
-            selected_id = st.selectbox(
-                "Selectionner un bien",
-                df_sorted["licitor_id"].tolist(),
-                format_func=lambda x: (
-                    f"N.{x} — "
-                    f"{df_sorted.loc[df_sorted['licitor_id'] == x, 'city'].iloc[0]} — "
-                    f"{df_sorted.loc[df_sorted['licitor_id'] == x, 'property_type'].iloc[0] or ''}"
-                ),
-            )
-            if selected_id:
-                row = df_sorted[df_sorted["licitor_id"] == selected_id].iloc[0]
-                c1, c2, c3 = st.columns(3)
-                with c1:
-                    st.markdown(f"**Type :** {row.get('property_type', 'N/A')}")
-                    st.markdown(f"**Ville :** {row.get('city', 'N/A')} ({row.get('department_code', '')})")
-                    surf_val = row.get("surface_m2")
-                    st.markdown(f"**Surface :** {surf_val:.1f} m²" if pd.notna(surf_val) and surf_val else "**Surface :** N/A")
-                with c2:
-                    map_val = row.get("mise_a_prix")
-                    st.markdown(f"**Mise a prix :** {map_val:,.0f} EUR" if pd.notna(map_val) and map_val else "**Mise a prix :** N/A")
-                    fp_val = row.get("final_price")
-                    st.markdown(f"**Prix final :** {fp_val:,.0f} EUR" if pd.notna(fp_val) and fp_val else "**Prix final :** N/A")
-                    ratio_val = row.get("ratio")
-                    st.markdown(f"**Ratio :** {ratio_val:.2f}x" if pd.notna(ratio_val) else "**Ratio :** N/A")
-                    pm2_val = row.get("prix_m2")
-                    st.markdown(f"**Prix/m² :** {pm2_val:,.0f} €/m²" if pd.notna(pm2_val) else "**Prix/m² :** N/A")
-                with c3:
-                    st.markdown(f"**Resultat :** {STATUS_LABELS.get(row.get('result_status', ''), row.get('result_status', 'N/A'))}")
-                    st.markdown(f"**Date :** {row.get('result_date', 'N/A')}")
-                    st.markdown(f"**Tribunal :** {row.get('tribunal_name', 'N/A')}")
-                    if pd.notna(row.get("url_path")):
-                        st.markdown(f"[Voir sur Licitor](https://www.licitor.com{row['url_path']})")
 
     # ================================================================
     # TAB 2 : Visualisations
@@ -500,7 +515,7 @@ def render():
             hole=0.35,
         )
         fig_pie.update_traces(textinfo="percent+value")
-        st.plotly_chart(fig_pie, width="stretch")
+        st.plotly_chart(fig_pie, use_container_width=True)
 
         # ── Bar chart : nb de ventes par departement ──────────────────
         if df["department_code"].notna().any():
@@ -536,7 +551,7 @@ def render():
                 xaxis_title="Departement",
                 yaxis_title="Nombre",
             )
-            st.plotly_chart(fig_dept, width="stretch")
+            st.plotly_chart(fig_dept, use_container_width=True)
 
         # ── Histogram : distribution des prix finaux ──────────────────
         df_with_price = sold_df[sold_df["final_price"].notna() & (sold_df["final_price"] > 0)]
@@ -559,7 +574,7 @@ def render():
                 color_discrete_sequence=["#3498db"],
             )
             fig_hist.update_layout(yaxis_title="Nombre de biens")
-            st.plotly_chart(fig_hist, width="stretch")
+            st.plotly_chart(fig_hist, use_container_width=True)
 
         # ── Box plot : prix final par type de bien ────────────────────
         if not df_with_price.empty and df_with_price["property_type"].notna().any():
@@ -575,7 +590,7 @@ def render():
                     color="property_type",
                 )
                 fig_box.update_layout(showlegend=False)
-                st.plotly_chart(fig_box, width="stretch")
+                st.plotly_chart(fig_box, use_container_width=True)
 
         # ── Violin plot : mise a prix par statut ──────────────────────
         df_violin = df[df["mise_a_prix"].notna() & (df["mise_a_prix"] > 0)].copy()
@@ -591,7 +606,7 @@ def render():
                 color_discrete_map=COLOR_MAP,
             )
             fig_violin.update_layout(showlegend=False)
-            st.plotly_chart(fig_violin, width="stretch")
+            st.plotly_chart(fig_violin, use_container_width=True)
 
     # ================================================================
     # TAB 3 : Ratio analysis
@@ -631,7 +646,7 @@ def render():
             fig_r.add_vline(x=median_val, line_dash="dot", line_color="blue",
                             annotation_text=f"Median {median_val:.2f}x")
             fig_r.update_layout(yaxis_title="Nombre de biens")
-            st.plotly_chart(fig_r, width="stretch")
+            st.plotly_chart(fig_r, use_container_width=True)
 
             # Scatter : MAP vs prix final
             fig_scatter = px.scatter(
@@ -656,7 +671,7 @@ def render():
                 legend_title="Departement",
                 height=550,
             )
-            st.plotly_chart(fig_scatter, width="stretch")
+            st.plotly_chart(fig_scatter, use_container_width=True)
 
             # Ratio by property type (boxplot)
             if df_ratio["property_type"].notna().any():
@@ -673,35 +688,35 @@ def render():
                     )
                     fig_rbox.add_hline(y=1.0, line_dash="dash", line_color="gray")
                     fig_rbox.update_layout(showlegend=False)
-                    st.plotly_chart(fig_rbox, width="stretch")
+                    st.plotly_chart(fig_rbox, use_container_width=True)
 
             # Top gains / bargains
             st.subheader("Top encheres (plus forte hausse vs MAP)")
-            top_up = df_ratio.nlargest(10, "ratio")
             st.dataframe(
-                top_up[["licitor_id", "city", "department_code", "property_type",
-                         "mise_a_prix", "final_price", "ratio", "result_date"]]
-                .rename(columns={
+                df_ratio.nlargest(10, "ratio")[
+                    ["licitor_id", "city", "department_code", "property_type",
+                     "mise_a_prix", "final_price", "ratio", "result_date"]
+                ].rename(columns={
                     "licitor_id": "N.", "city": "Ville", "department_code": "Dept",
                     "property_type": "Type", "mise_a_prix": "MAP",
                     "final_price": "Prix final", "ratio": "Ratio",
                     "result_date": "Date",
                 }),
-                width="stretch", hide_index=True,
+                use_container_width=True, hide_index=True,
             )
 
             st.subheader("Biens vendus les moins chers (ratio le plus bas)")
-            top_down = df_ratio.nsmallest(10, "ratio")
             st.dataframe(
-                top_down[["licitor_id", "city", "department_code", "property_type",
-                           "mise_a_prix", "final_price", "ratio", "result_date"]]
-                .rename(columns={
+                df_ratio.nsmallest(10, "ratio")[
+                    ["licitor_id", "city", "department_code", "property_type",
+                     "mise_a_prix", "final_price", "ratio", "result_date"]
+                ].rename(columns={
                     "licitor_id": "N.", "city": "Ville", "department_code": "Dept",
                     "property_type": "Type", "mise_a_prix": "MAP",
                     "final_price": "Prix final", "ratio": "Ratio",
                     "result_date": "Date",
                 }),
-                width="stretch", hide_index=True,
+                use_container_width=True, hide_index=True,
             )
 
     # ================================================================
@@ -754,7 +769,7 @@ def render():
                 xaxis_title="Mois",
                 yaxis_title="Nombre",
             )
-            st.plotly_chart(fig_vol, width="stretch")
+            st.plotly_chart(fig_vol, use_container_width=True)
 
             # Price evolution
             monthly_with_price = monthly[monthly["avg_final"].notna()]
@@ -779,7 +794,7 @@ def render():
                     xaxis_title="Mois",
                     yaxis_title="EUR",
                 )
-                st.plotly_chart(fig_price, width="stretch")
+                st.plotly_chart(fig_price, use_container_width=True)
 
             # Ratio evolution
             monthly_with_ratio = monthly[monthly["median_ratio"].notna()]
@@ -801,7 +816,7 @@ def render():
                     xaxis_title="Mois",
                     yaxis_title="Ratio",
                 )
-                st.plotly_chart(fig_ratio_t, width="stretch")
+                st.plotly_chart(fig_ratio_t, use_container_width=True)
 
             # Success rate evolution
             monthly["taux_vente"] = monthly["nb_sold"] / monthly["nb_total"] * 100
@@ -821,7 +836,7 @@ def render():
                 yaxis_title="% vendus",
                 yaxis=dict(range=[0, 105]),
             )
-            st.plotly_chart(fig_rate, width="stretch")
+            st.plotly_chart(fig_rate, use_container_width=True)
 
     # ================================================================
     # TAB 5 : Geographic analysis
@@ -877,7 +892,7 @@ def render():
                 "taux_vente": "Taux vente",
             })
 
-            st.dataframe(dept_display, width="stretch", hide_index=True)
+            st.dataframe(dept_display, use_container_width=True, hide_index=True)
 
             # Scatter : taux de vente vs ratio median per department
             dept_scatter = dept_stats[
@@ -902,7 +917,7 @@ def render():
                 fig_dep_s.update_traces(textposition="top center")
                 fig_dep_s.add_hline(y=1.0, line_dash="dash", line_color="gray")
                 fig_dep_s.update_layout(height=500)
-                st.plotly_chart(fig_dep_s, width="stretch")
+                st.plotly_chart(fig_dep_s, use_container_width=True)
 
             # By tribunal
             if df["tribunal_name"].notna().any():
@@ -930,7 +945,7 @@ def render():
                     barmode="group",
                 )
                 fig_trib.update_layout(xaxis_tickangle=-45)
-                st.plotly_chart(fig_trib, width="stretch")
+                st.plotly_chart(fig_trib, use_container_width=True)
 
                 # Table
                 trib_display = trib_stats.copy()
@@ -951,4 +966,4 @@ def render():
                     "median_ratio": "Ratio median",
                     "taux_vente": "Taux vente",
                 })
-                st.dataframe(trib_display, width="stretch", hide_index=True)
+                st.dataframe(trib_display, use_container_width=True, hide_index=True)
