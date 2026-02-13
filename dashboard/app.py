@@ -18,6 +18,13 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
+from db.database import Database
+
+# Auto-initialize the database on first run (creates tables if missing)
+if "db_initialized" not in st.session_state:
+    Database().initialize()
+    st.session_state.db_initialized = True
+
 st.sidebar.title("Encheres Immo")
 st.sidebar.markdown("Analyse des ventes aux encheres immobilieres")
 

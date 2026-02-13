@@ -7,4 +7,3 @@ plotly>=5.18
 folium>=0.15
 streamlit-folium>=0.15
 pandas>=2.1
-pytest>=7.4
