@@ -29,22 +29,23 @@ def render():
         )
         return
 
-    # Filters in sidebar
-    with st.sidebar:
-        st.subheader("Filtres carte")
-        status_filter = st.multiselect(
-            "Statut", ["upcoming", "past"], default=["upcoming"]
-        )
-        departments = sorted(df["department_code"].dropna().unique().tolist())
-        dept_filter = st.multiselect("Departements", departments)
-
-        price_min, price_max = st.slider(
-            "Prix (EUR)",
-            min_value=0,
-            max_value=int(df["mise_a_prix"].max() or 1_000_000),
-            value=(0, int(df["mise_a_prix"].max() or 1_000_000)),
-            step=10_000,
-        )
+    # Filters — inline in central panel
+    with st.expander("Filtres carte", expanded=False):
+        mc1, mc2, mc3 = st.columns(3)
+        with mc1:
+            status_filter = st.multiselect(
+                "Statut", ["upcoming", "past"], default=["upcoming"], key="map_status"
+            )
+        with mc2:
+            departments = sorted(df["department_code"].dropna().unique().tolist())
+            dept_filter = st.multiselect("Departements", departments, key="map_depts")
+        with mc3:
+            _map_price_max = int(df["mise_a_prix"].max() or 1_000_000)
+            pc1, pc2 = st.columns(2)
+            with pc1:
+                price_min = st.number_input("Prix min", min_value=0, max_value=_map_price_max, value=0, step=10_000, key="map_pmin")
+            with pc2:
+                price_max = st.number_input("Prix max", min_value=0, max_value=_map_price_max, value=_map_price_max, step=10_000, key="map_pmax")
 
     # Apply filters
     df_filtered = df.copy()

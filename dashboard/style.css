@@ -17,27 +17,75 @@ section[data-testid="stSidebar"] {
     border-right: 1px solid #334155;
 }
 
-section[data-testid="stSidebar"] .stMarkdown p,
-section[data-testid="stSidebar"] .stMarkdown h1,
-section[data-testid="stSidebar"] .stMarkdown h2,
-section[data-testid="stSidebar"] .stMarkdown h3,
-section[data-testid="stSidebar"] label,
-section[data-testid="stSidebar"] span {
+section[data-testid="stSidebar"] * {
     color: #e2e8f0 !important;
 }
 
-section[data-testid="stSidebar"] .stRadio label span {
-    color: #cbd5e1 !important;
-    font-weight: 500;
+section[data-testid="stSidebar"] hr {
+    border-color: #334155 !important;
+}
+
+/* ── Sidebar navigation pills ──────────────────────────────────── */
+/* Hide the "Navigation" label */
+section[data-testid="stSidebar"] .stRadio > label {
+    display: none !important;
+}
+
+/* Hide the radio circle */
+section[data-testid="stSidebar"] .stRadio [role="radiogroup"] label [data-testid="stMarkdownContainer"] {
+    padding: 0 !important;
+}
+
+section[data-testid="stSidebar"] .stRadio [role="radiogroup"] label > div:first-child {
+    display: none !important;
+}
+
+/* Style each option as a nav pill */
+section[data-testid="stSidebar"] .stRadio [role="radiogroup"] label {
+    display: flex !important;
+    align-items: center;
+    padding: 10px 16px !important;
+    margin: 2px 0 !important;
+    border-radius: 8px !important;
+    cursor: pointer !important;
+    transition: all 0.15s ease !important;
+    background: transparent !important;
+    border: none !important;
+}
+
+section[data-testid="stSidebar"] .stRadio [role="radiogroup"] label span,
+section[data-testid="stSidebar"] .stRadio [role="radiogroup"] label p {
+    color: #94a3b8 !important;
+    font-weight: 500 !important;
+    font-size: 0.92rem !important;
     letter-spacing: 0.01em;
 }
 
-section[data-testid="stSidebar"] .stRadio label:hover span {
-    color: #ffffff !important;
+section[data-testid="stSidebar"] .stRadio [role="radiogroup"] label:hover {
+    background: rgba(99, 102, 241, 0.12) !important;
 }
 
-section[data-testid="stSidebar"] hr {
-    border-color: #334155;
+section[data-testid="stSidebar"] .stRadio [role="radiogroup"] label:hover span,
+section[data-testid="stSidebar"] .stRadio [role="radiogroup"] label:hover p {
+    color: #e2e8f0 !important;
+}
+
+/* Active / selected state */
+section[data-testid="stSidebar"] .stRadio [role="radiogroup"] label[data-checked="true"],
+section[data-testid="stSidebar"] .stRadio [role="radiogroup"] label[aria-checked="true"],
+section[data-testid="stSidebar"] .stRadio [role="radiogroup"] label:has(input:checked) {
+    background: rgba(99, 102, 241, 0.2) !important;
+    border-left: 3px solid #818cf8 !important;
+}
+
+section[data-testid="stSidebar"] .stRadio [role="radiogroup"] label[data-checked="true"] span,
+section[data-testid="stSidebar"] .stRadio [role="radiogroup"] label[data-checked="true"] p,
+section[data-testid="stSidebar"] .stRadio [role="radiogroup"] label[aria-checked="true"] span,
+section[data-testid="stSidebar"] .stRadio [role="radiogroup"] label[aria-checked="true"] p,
+section[data-testid="stSidebar"] .stRadio [role="radiogroup"] label:has(input:checked) span,
+section[data-testid="stSidebar"] .stRadio [role="radiogroup"] label:has(input:checked) p {
+    color: #ffffff !important;
+    font-weight: 600 !important;
 }
 
 /* ── Main header ───────────────────────────────────────────────── */
@@ -149,12 +197,17 @@ button[kind="secondary"]:hover,
     font-weight: 600;
 }
 
-/* ── Dataframes ────────────────────────────────────────────────── */
+/* ── Dataframes — full width, no wrapper constraint ────────────── */
 div[data-testid="stDataFrame"] {
     border: 1px solid #e2e8f0;
     border-radius: 12px;
     overflow: hidden;
     box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+    width: 100% !important;
+}
+
+div[data-testid="stDataFrame"] > div {
+    width: 100% !important;
 }
 
 /* ── Alerts / Banners ──────────────────────────────────────────── */
