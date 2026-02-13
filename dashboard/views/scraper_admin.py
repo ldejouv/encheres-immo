@@ -3,10 +3,8 @@
 import sys
 import logging
 import threading
-import signal
-import os
+import time
 from pathlib import Path
-from datetime import datetime
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
 
@@ -14,7 +12,7 @@ import streamlit as st
 
 from db.database import Database
 from scraper.orchestrator import ScrapingOrchestrator
-from scraper.progress import read_progress, is_job_running, clear_progress
+from scraper.progress import read_progress, is_job_running, clear_progress, request_cancel
 
 _PROJECT_ROOT = str(Path(__file__).resolve().parent.parent.parent)
 
@@ -89,13 +87,9 @@ def _launch_job(mode: str, limit: int | None = None):
     thread.start()
 
 
-def _stop_job(pid: int):
-    """Send SIGTERM to the scraper process."""
-    try:
-        os.kill(pid, signal.SIGTERM)
-        return True
-    except OSError:
-        return False
+def _stop_job():
+    """Request graceful cancellation of the running scraper thread."""
+    request_cancel()
 
 
 def _get_db_stats() -> dict:
@@ -179,7 +173,7 @@ def render():
     if running and progress:
         _render_progress(progress)
         st.divider()
-    elif progress and progress.get("status") in ("finished", "error"):
+    elif progress and progress.get("status") in ("finished", "error", "cancelled"):
         _render_progress_summary(progress)
         st.divider()
 
@@ -279,13 +273,10 @@ def _render_progress(p: dict):
     col_stop, col_refresh = st.columns([1, 1])
     with col_stop:
         if st.button("Arreter le scraper", type="secondary"):
-            pid = p.get("pid")
-            if pid and _stop_job(pid):
-                st.warning("Signal d'arret envoye.")
-                clear_progress()
-                st.rerun()
-            else:
-                st.error("Impossible d'arreter le processus.")
+            _stop_job()
+            st.warning("Signal d'arret envoye. Le scraper s'arretera apres l'element en cours.")
+            time.sleep(2)
+            st.rerun()
     with col_refresh:
         if st.button("Rafraichir", type="primary"):
             st.rerun()
@@ -300,6 +291,8 @@ def _render_progress_summary(p: dict):
 
     if p["status"] == "finished":
         st.success(f"**{job_label}** termine avec succes !")
+    elif p["status"] == "cancelled":
+        st.warning(f"**{job_label}** annule par l'utilisateur.")
     else:
         st.error(f"**{job_label}** termine avec une erreur : {p.get('error_message', '?')}")
 

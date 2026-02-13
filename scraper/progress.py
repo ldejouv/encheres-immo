@@ -14,6 +14,7 @@ from typing import Optional
 
 _PROGRESS_DIR = Path(__file__).resolve().parent.parent / "data"
 _PROGRESS_FILE = _PROGRESS_DIR / "scrape_progress.json"
+_CANCEL_FILE = _PROGRESS_DIR / "scrape_cancel.flag"
 
 
 def _now_ts() -> float:
@@ -44,6 +45,8 @@ class ProgressWriter:
         self.not_found = 0
         self.started_at = _now_ts()
         self.current_item = ""
+        # Clear any leftover cancel flag from a previous run
+        _clear_cancel_flag()
         self._flush()
 
     def tick(
@@ -69,8 +72,17 @@ class ProgressWriter:
     def finish(self, status: str = "finished"):
         self._flush(status=status)
 
+    def cancel(self):
+        """Mark the job as cancelled by the user."""
+        self._flush(status="cancelled")
+
     def abort(self, reason: str = ""):
         self._flush(status="error", error_message=reason)
+
+    @staticmethod
+    def is_cancel_requested() -> bool:
+        """Check if the user has requested cancellation."""
+        return _CANCEL_FILE.exists()
 
     def _flush(self, status: str = "running", error_message: str = ""):
         elapsed = _now_ts() - self.started_at
@@ -147,3 +159,16 @@ def clear_progress():
     """Remove the progress file."""
     if _PROGRESS_FILE.exists():
         _PROGRESS_FILE.unlink()
+    _clear_cancel_flag()
+
+
+def request_cancel():
+    """Signal the running scraper to stop gracefully."""
+    _PROGRESS_DIR.mkdir(parents=True, exist_ok=True)
+    _CANCEL_FILE.write_text("cancel", encoding="utf-8")
+
+
+def _clear_cancel_flag():
+    """Remove the cancel flag file."""
+    if _CANCEL_FILE.exists():
+        _CANCEL_FILE.unlink()
