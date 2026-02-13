@@ -256,175 +256,14 @@ def render():
     ])
 
     # ================================================================
-    # TAB 1 : Sortable / filterable data table
+    # TAB 1 : Data table (sorted via column headers)
     # ================================================================
     with tab_table:
         st.subheader("Explorer les resultats d'adjudications")
 
-        # ── Inline quick-filters (above the table) ────────────────────
-        st.markdown("##### Filtres rapides")
-        qf1, qf2, qf3, qf4 = st.columns(4)
-        with qf1:
-            tbl_search = st.text_input(
-                "Recherche libre",
-                placeholder="ville, type, tribunal...",
-                key="tbl_search",
-            )
-        with qf2:
-            tbl_statuses = st.multiselect(
-                "Resultat",
-                df["result_status"].dropna().unique().tolist(),
-                format_func=lambda s: STATUS_LABELS.get(s, s),
-                key="tbl_status_filter",
-            )
-        with qf3:
-            tbl_depts = st.multiselect(
-                "Departements",
-                sorted(df["department_code"].dropna().unique().tolist()),
-                key="tbl_dept_filter",
-            )
-        with qf4:
-            tbl_types = st.multiselect(
-                "Types de bien",
-                sorted(df["property_type"].dropna().unique().tolist()),
-                key="tbl_type_filter",
-            )
-
-        qf5, qf6 = st.columns(2)
-        with qf5:
-            tbl_tribunals = st.multiselect(
-                "Tribunaux",
-                sorted(df["tribunal_name"].dropna().unique().tolist()),
-                key="tbl_tribunal_filter",
-            )
-        with qf6:
-            ratio_vals = df["ratio"].dropna()
-            if not ratio_vals.empty:
-                ratio_range = st.slider(
-                    "Plage de ratio (final / MAP)",
-                    min_value=0.0,
-                    max_value=min(float(ratio_vals.max()), 20.0),
-                    value=(0.0, min(float(ratio_vals.max()), 20.0)),
-                    step=0.1,
-                    key="tbl_ratio_range",
-                )
-            else:
-                ratio_range = None
-
-        # Price range filters with manual input
-        qf7, qf8 = st.columns(2)
-        with qf7:
-            map_vals = df["mise_a_prix"].dropna()
-            if not map_vals.empty and map_vals.max() > 0:
-                _tbl_map_max = int(map_vals.max())
-                tm1, tm2 = st.columns(2)
-                with tm1:
-                    tbl_map_min = st.number_input("MAP min", min_value=0, max_value=_tbl_map_max, value=0, step=10_000, key="tbl_map_min")
-                with tm2:
-                    tbl_map_max = st.number_input("MAP max", min_value=0, max_value=_tbl_map_max, value=_tbl_map_max, step=10_000, key="tbl_map_max")
-                tbl_map_range = (tbl_map_min, tbl_map_max)
-            else:
-                tbl_map_range = None
-        with qf8:
-            final_vals = df["final_price"].dropna()
-            if not final_vals.empty and final_vals.max() > 0:
-                _tbl_final_max = int(final_vals.max())
-                tf1, tf2 = st.columns(2)
-                with tf1:
-                    tbl_final_min = st.number_input("Prix final min", min_value=0, max_value=_tbl_final_max, value=0, step=10_000, key="tbl_final_min")
-                with tf2:
-                    tbl_final_max = st.number_input("Prix final max", min_value=0, max_value=_tbl_final_max, value=_tbl_final_max, step=10_000, key="tbl_final_max")
-                tbl_final_range = (tbl_final_min, tbl_final_max)
-            else:
-                tbl_final_range = None
-
-        # Surface range filter
-        qf9 = st.columns(1)[0]
-        with qf9:
-            surf_vals = df["surface_m2"].dropna()
-            if not surf_vals.empty and surf_vals.max() > 0:
-                _tbl_surf_max = int(surf_vals.max())
-                ts1, ts2 = st.columns(2)
-                with ts1:
-                    tbl_surf_min = st.number_input("Surface min (m2)", min_value=0, max_value=_tbl_surf_max, value=0, step=10, key="tbl_surf_min")
-                with ts2:
-                    tbl_surf_max = st.number_input("Surface max (m2)", min_value=0, max_value=_tbl_surf_max, value=_tbl_surf_max, step=10, key="tbl_surf_max")
-                tbl_surface_range = (tbl_surf_min, tbl_surf_max)
-            else:
-                tbl_surface_range = None
-
-        # Apply inline filters on the already-filtered dataframe
-        df_tab = df.copy()
-        if tbl_search.strip():
-            search_lower = tbl_search.strip().lower()
-            mask = pd.Series(False, index=df_tab.index)
-            for col in ["city", "property_type", "tribunal_name", "department_code", "description"]:
-                if col in df_tab.columns:
-                    mask = mask | df_tab[col].fillna("").str.lower().str.contains(search_lower, regex=False)
-            df_tab = df_tab[mask]
-        if tbl_statuses:
-            df_tab = df_tab[df_tab["result_status"].isin(tbl_statuses)]
-        if tbl_depts:
-            df_tab = df_tab[df_tab["department_code"].isin(tbl_depts)]
-        if tbl_types:
-            df_tab = df_tab[df_tab["property_type"].isin(tbl_types)]
-        if tbl_tribunals:
-            df_tab = df_tab[df_tab["tribunal_name"].isin(tbl_tribunals)]
-        if ratio_range:
-            df_tab = df_tab[
-                (df_tab["ratio"].isna())
-                | ((df_tab["ratio"] >= ratio_range[0]) & (df_tab["ratio"] <= ratio_range[1]))
-            ]
-        if tbl_map_range:
-            df_tab = df_tab[
-                (df_tab["mise_a_prix"].isna())
-                | ((df_tab["mise_a_prix"] >= tbl_map_range[0]) & (df_tab["mise_a_prix"] <= tbl_map_range[1]))
-            ]
-        if tbl_final_range:
-            df_tab = df_tab[
-                (df_tab["final_price"].isna())
-                | ((df_tab["final_price"] >= tbl_final_range[0]) & (df_tab["final_price"] <= tbl_final_range[1]))
-            ]
-        if tbl_surface_range:
-            df_tab = df_tab[
-                (df_tab["surface_m2"].isna())
-                | ((df_tab["surface_m2"] >= tbl_surface_range[0]) & (df_tab["surface_m2"] <= tbl_surface_range[1]))
-            ]
-
-        st.markdown("---")
-
-        # Sorting controls
-        sort_cols = {
-            "Date de resultat": "result_date",
-            "Mise a prix": "mise_a_prix",
-            "Prix final": "final_price",
-            "Prix/m2": "prix_m2",
-            "Ratio final/MAP": "ratio",
-            "Surface (m2)": "surface_m2",
-            "Ville": "city",
-            "Departement": "department_code",
-            "Type de bien": "property_type",
-        }
-        col_sort, col_dir = st.columns([3, 1])
-        with col_sort:
-            sort_by_label = st.selectbox(
-                "Trier par", list(sort_cols.keys()), index=0
-            )
-        with col_dir:
-            sort_asc = st.radio("Ordre", ["Desc", "Asc"], index=0, horizontal=True)
-
-        sort_col = sort_cols[sort_by_label]
-        ascending = sort_asc == "Asc"
-
-        # Sort
-        df_sorted = df_tab.sort_values(
-            by=sort_col,
-            ascending=ascending,
-            na_position="last",
-        )
-
         # Build Licitor link column
-        df_sorted["licitor_url"] = df_sorted["url_path"].apply(
+        df_tab = df.copy()
+        df_tab["licitor_url"] = df_tab["url_path"].apply(
             lambda p: f"https://www.licitor.com{p}" if pd.notna(p) and p else None
         )
 
@@ -435,8 +274,8 @@ def render():
             "ratio", "label_status",
             "result_date", "tribunal_name", "licitor_url",
         ]
-        available = [c for c in display_cols if c in df_sorted.columns]
-        df_show = df_sorted[available].copy()
+        available = [c for c in display_cols if c in df_tab.columns]
+        df_show = df_tab[available].copy()
 
         col_names = {
             "licitor_id": "N.",
@@ -455,11 +294,15 @@ def render():
         }
         df_show = df_show.rename(columns=col_names)
 
-        # Full-width table without fixed height
+        # Dynamic height: ~35px per row + header, min 400, enough for 100 rows
+        _row_height = 35
+        _table_height = max(400, min(len(df_show), 100) * _row_height + 40)
+
         st.dataframe(
             df_show,
             use_container_width=True,
             hide_index=True,
+            height=_table_height,
             column_config={
                 "Surface (m2)": st.column_config.NumberColumn(
                     "Surface (m2)",
