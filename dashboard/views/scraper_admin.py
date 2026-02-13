@@ -1,7 +1,8 @@
 """Scraper administration page — launch jobs and monitor progress."""
 
 import sys
-import subprocess
+import logging
+import threading
 import signal
 import os
 from pathlib import Path
@@ -12,53 +13,12 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
 import streamlit as st
 
 from db.database import Database
+from scraper.orchestrator import ScrapingOrchestrator
 from scraper.progress import read_progress, is_job_running, clear_progress
 
 _PROJECT_ROOT = str(Path(__file__).resolve().parent.parent.parent)
 
 # ── Job definitions ──────────────────────────────────────────────────
-
-JOBS = {
-    "incremental": {
-        "label": "Scrape incrementiel",
-        "icon": "🔄",
-        "description": "Recupere les nouvelles encheres a venir et leurs details.",
-        "cmd": ["python3", "scripts/run_scrape.py", "incremental", "--log-level", "INFO"],
-    },
-    "history": {
-        "label": "Historique des adjudications",
-        "icon": "📜",
-        "description": "Scrape toutes les audiences passees, tribunal par tribunal.",
-        "cmd": ["python3", "scripts/run_scrape.py", "history", "--log-level", "INFO"],
-    },
-    "map_backfill": {
-        "label": "Backfill mises a prix",
-        "icon": "💰",
-        "description": "Complete les mises a prix manquantes en visitant chaque page de detail.",
-        "cmd_fn": lambda limit: [
-            "python3", "scripts/run_scrape.py", "map-backfill",
-            "--limit", str(limit), "--log-level", "INFO",
-        ],
-    },
-    "surface_backfill": {
-        "label": "Backfill surfaces",
-        "icon": "📐",
-        "description": "Complete les surfaces manquantes en analysant le texte de chaque page de detail.",
-        "cmd_fn": lambda limit: [
-            "python3", "scripts/run_scrape.py", "surface-backfill",
-            "--limit", str(limit), "--log-level", "INFO",
-        ],
-    },
-    "backfill": {
-        "label": "Backfill details",
-        "icon": "📋",
-        "description": "Scrape les pages de detail pour les annonces qui en manquent.",
-        "cmd_fn": lambda limit: [
-            "python3", "scripts/run_scrape.py", "backfill",
-            "--limit", str(limit), "--log-level", "INFO",
-        ],
-    },
-}
 
 JOB_TYPE_LABELS = {
     "incremental": "Scrape incrementiel",
@@ -68,19 +28,65 @@ JOB_TYPE_LABELS = {
     "detail_backfill": "Backfill details",
 }
 
+JOBS = {
+    "incremental": {
+        "label": "Scrape incrementiel",
+        "icon": "\U0001f504",
+        "description": "Recupere les nouvelles encheres a venir et leurs details.",
+    },
+    "history": {
+        "label": "Historique des adjudications",
+        "icon": "\U0001f4dc",
+        "description": "Scrape toutes les audiences passees, tribunal par tribunal.",
+    },
+    "map_backfill": {
+        "label": "Backfill mises a prix",
+        "icon": "\U0001f4b0",
+        "description": "Complete les mises a prix manquantes en visitant chaque page de detail.",
+    },
+    "surface_backfill": {
+        "label": "Backfill surfaces",
+        "icon": "\U0001f4d0",
+        "description": "Complete les surfaces manquantes en analysant le texte de chaque page de detail.",
+    },
+    "backfill": {
+        "label": "Backfill details",
+        "icon": "\U0001f4cb",
+        "description": "Scrape les pages de detail pour les annonces qui en manquent.",
+    },
+}
+
 
 # ── Helpers ──────────────────────────────────────────────────────────
 
-def _launch_job(cmd: list[str]):
-    """Launch a scraper job as a detached subprocess."""
+def _launch_job(mode: str, limit: int | None = None):
+    """Launch a scraper job in a background thread (works on Streamlit Cloud)."""
     clear_progress()
-    subprocess.Popen(
-        cmd,
-        cwd=_PROJECT_ROOT,
-        stdout=open(os.path.join(_PROJECT_ROOT, "data", "scrape_stdout.log"), "w"),
-        stderr=subprocess.STDOUT,
-        start_new_session=True,
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s %(name)s %(levelname)s %(message)s",
     )
+    db = Database()
+    db.initialize()
+    orchestrator = ScrapingOrchestrator()
+
+    def _run():
+        try:
+            if mode == "incremental":
+                orchestrator.run_incremental()
+            elif mode == "history":
+                orchestrator.run_history_backfill()
+            elif mode == "map-backfill":
+                orchestrator.run_map_backfill(limit=limit or 500)
+            elif mode == "surface-backfill":
+                orchestrator.run_surface_backfill(limit=limit or 500)
+            elif mode == "backfill":
+                orchestrator.run_detail_backfill(limit=limit or 100)
+        except Exception:
+            logging.getLogger(__name__).exception("Scraper job '%s' failed", mode)
+
+    thread = threading.Thread(target=_run, daemon=True)
+    thread.start()
 
 
 def _stop_job(pid: int):
@@ -200,8 +206,7 @@ def render():
                         key=f"limit_{key}",
                     )
                     if st.button(f"Lancer {job['label']}", key=f"btn_{key}", type="primary"):
-                        cmd = job["cmd_fn"](limit)
-                        _launch_job(cmd)
+                        _launch_job("map-backfill", limit=limit)
                         st.success(f"{job['label']} lance ! Rechargez la page pour voir la progression.")
                         st.rerun()
 
@@ -215,8 +220,7 @@ def render():
                         key=f"limit_{key}",
                     )
                     if st.button(f"Lancer {job['label']}", key=f"btn_{key}", type="primary"):
-                        cmd = job["cmd_fn"](limit)
-                        _launch_job(cmd)
+                        _launch_job("surface-backfill", limit=limit)
                         st.success(f"{job['label']} lance ! Rechargez la page pour voir la progression.")
                         st.rerun()
 
@@ -230,14 +234,13 @@ def render():
                         key=f"limit_{key}",
                     )
                     if st.button(f"Lancer {job['label']}", key=f"btn_{key}", type="primary"):
-                        cmd = job["cmd_fn"](limit)
-                        _launch_job(cmd)
+                        _launch_job("backfill", limit=limit)
                         st.success(f"{job['label']} lance !")
                         st.rerun()
 
                 else:
                     if st.button(f"Lancer {job['label']}", key=f"btn_{key}", type="primary"):
-                        _launch_job(job["cmd"])
+                        _launch_job(key)
                         st.success(f"{job['label']} lance !")
                         st.rerun()
 
@@ -247,7 +250,7 @@ def _render_progress(p: dict):
     st.subheader("Scraper en cours")
 
     job_label = JOB_TYPE_LABELS.get(p["job_type"], p["job_type"])
-    status_color = "🟢" if p["status"] == "running" else "🔴"
+    status_color = "\U0001f7e2" if p["status"] == "running" else "\U0001f534"
 
     st.markdown(f"### {status_color} {job_label}")
 
@@ -257,10 +260,10 @@ def _render_progress(p: dict):
 
     # KPI cards
     c1, c2, c3, c4 = st.columns(4)
-    c1.metric("Temps ecoule", p.get("elapsed_fmt", "—"))
+    c1.metric("Temps ecoule", p.get("elapsed_fmt", "\u2014"))
     c2.metric("Traite", f"{p['processed']:,} / {p['total']:,}")
     c3.metric("Restant", f"{p['remaining']:,}")
-    c4.metric("Temps restant estime", p.get("eta_fmt", "—"))
+    c4.metric("Temps restant estime", p.get("eta_fmt", "\u2014"))
 
     # Secondary stats
     c5, c6, c7, c8 = st.columns(4)
@@ -301,7 +304,7 @@ def _render_progress_summary(p: dict):
         st.error(f"**{job_label}** termine avec une erreur : {p.get('error_message', '?')}")
 
     c1, c2, c3, c4 = st.columns(4)
-    c1.metric("Duree totale", p.get("elapsed_fmt", "—"))
+    c1.metric("Duree totale", p.get("elapsed_fmt", "\u2014"))
     c2.metric("Traites", f"{p['processed']:,}")
     c3.metric("Mis a jour", f"{p['updated']:,}")
     c4.metric("Erreurs", f"{p['errors']:,}")
