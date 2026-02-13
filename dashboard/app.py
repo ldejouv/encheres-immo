@@ -20,24 +20,39 @@ st.set_page_config(
 
 from db.database import Database
 
+# ── Load custom CSS ───────────────────────────────────────────────
+_css_path = Path(__file__).resolve().parent / "style.css"
+if _css_path.exists():
+    st.markdown(f"<style>{_css_path.read_text()}</style>", unsafe_allow_html=True)
+
 # Auto-initialize the database on first run (creates tables if missing)
 if "db_initialized" not in st.session_state:
     Database().initialize()
     st.session_state.db_initialized = True
 
-st.sidebar.title("Encheres Immo")
-st.sidebar.markdown("Analyse des ventes aux encheres immobilieres")
+# ── Sidebar navigation ───────────────────────────────────────────
+st.sidebar.markdown(
+    '<h1 style="color:#f8fafc; font-size:1.6rem; margin-bottom:0;">'
+    '\u2696\ufe0f Encheres Immo</h1>'
+    '<p style="color:#94a3b8; font-size:0.85rem; margin-top:4px;">'
+    'Analyse des ventes aux encheres immobilieres</p>',
+    unsafe_allow_html=True,
+)
+st.sidebar.markdown("---")
+
+_NAV_ITEMS = {
+    "Encheres a venir":   "\U0001f4c5",
+    "Analyse historique":  "\U0001f4ca",
+    "Carte des biens":     "\U0001f5fa\ufe0f",
+    "Alertes":             "\U0001f514",
+    "Saisie resultats":    "\u270f\ufe0f",
+    "Administration":      "\u2699\ufe0f",
+}
 
 page = st.sidebar.radio(
     "Navigation",
-    [
-        "Encheres a venir",
-        "Analyse historique",
-        "Carte des biens",
-        "Alertes",
-        "Saisie resultats",
-        "Administration",
-    ],
+    list(_NAV_ITEMS.keys()),
+    format_func=lambda p: f"{_NAV_ITEMS[p]}  {p}",
 )
 
 try:
