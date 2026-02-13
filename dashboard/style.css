@@ -1,0 +1,234 @@
+/* ══════════════════════════════════════════════════════════════════
+   Encheres Immo — Custom Theme
+   Modern, clean design inspired by Tailwind UI
+   ══════════════════════════════════════════════════════════════════ */
+
+/* ── Google Font import ────────────────────────────────────────── */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+
+/* ── Global typography ─────────────────────────────────────────── */
+html, body, [class*="st-"] {
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+}
+
+/* ── Sidebar ───────────────────────────────────────────────────── */
+section[data-testid="stSidebar"] {
+    background: linear-gradient(180deg, #1e293b 0%, #0f172a 100%);
+    border-right: 1px solid #334155;
+}
+
+section[data-testid="stSidebar"] .stMarkdown p,
+section[data-testid="stSidebar"] .stMarkdown h1,
+section[data-testid="stSidebar"] .stMarkdown h2,
+section[data-testid="stSidebar"] .stMarkdown h3,
+section[data-testid="stSidebar"] label,
+section[data-testid="stSidebar"] span {
+    color: #e2e8f0 !important;
+}
+
+section[data-testid="stSidebar"] .stRadio label span {
+    color: #cbd5e1 !important;
+    font-weight: 500;
+    letter-spacing: 0.01em;
+}
+
+section[data-testid="stSidebar"] .stRadio label:hover span {
+    color: #ffffff !important;
+}
+
+section[data-testid="stSidebar"] hr {
+    border-color: #334155;
+}
+
+/* ── Main header ───────────────────────────────────────────────── */
+h1 {
+    font-weight: 700 !important;
+    letter-spacing: -0.02em !important;
+    color: #0f172a !important;
+}
+
+h2 {
+    font-weight: 600 !important;
+    letter-spacing: -0.01em !important;
+    color: #1e293b !important;
+    border-bottom: 2px solid #e2e8f0;
+    padding-bottom: 0.4rem;
+}
+
+h3 {
+    font-weight: 600 !important;
+    color: #334155 !important;
+}
+
+/* ── Metric cards ──────────────────────────────────────────────── */
+div[data-testid="stMetric"] {
+    background: #ffffff;
+    border: 1px solid #e2e8f0;
+    border-radius: 12px;
+    padding: 16px 20px;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04), 0 1px 2px rgba(0, 0, 0, 0.06);
+    transition: box-shadow 0.2s ease, transform 0.2s ease;
+}
+
+div[data-testid="stMetric"]:hover {
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08), 0 2px 4px rgba(0, 0, 0, 0.06);
+    transform: translateY(-1px);
+}
+
+div[data-testid="stMetric"] label {
+    color: #64748b !important;
+    font-weight: 500 !important;
+    font-size: 0.8rem !important;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+div[data-testid="stMetric"] div[data-testid="stMetricValue"] {
+    font-weight: 700 !important;
+    color: #1e293b !important;
+}
+
+/* ── Buttons ───────────────────────────────────────────────────── */
+button[kind="primary"],
+.stButton > button[kind="primary"] {
+    background: linear-gradient(135deg, #6366f1, #4f46e5) !important;
+    border: none !important;
+    border-radius: 8px !important;
+    font-weight: 600 !important;
+    letter-spacing: 0.02em;
+    padding: 0.5rem 1.2rem !important;
+    box-shadow: 0 1px 3px rgba(99, 102, 241, 0.3);
+    transition: all 0.2s ease !important;
+}
+
+button[kind="primary"]:hover,
+.stButton > button[kind="primary"]:hover {
+    box-shadow: 0 4px 12px rgba(99, 102, 241, 0.4) !important;
+    transform: translateY(-1px);
+}
+
+button[kind="secondary"],
+.stButton > button[kind="secondary"] {
+    border: 1px solid #d1d5db !important;
+    border-radius: 8px !important;
+    font-weight: 500 !important;
+    background: #ffffff !important;
+    color: #374151 !important;
+    transition: all 0.2s ease !important;
+}
+
+button[kind="secondary"]:hover,
+.stButton > button[kind="secondary"]:hover {
+    border-color: #6366f1 !important;
+    color: #6366f1 !important;
+    background: #f5f3ff !important;
+}
+
+/* ── Tabs ──────────────────────────────────────────────────────── */
+.stTabs [data-baseweb="tab-list"] {
+    gap: 0;
+    border-bottom: 2px solid #e2e8f0;
+}
+
+.stTabs [data-baseweb="tab"] {
+    padding: 10px 24px;
+    font-weight: 500;
+    color: #64748b;
+    border-bottom: 2px solid transparent;
+    margin-bottom: -2px;
+    transition: all 0.2s ease;
+}
+
+.stTabs [data-baseweb="tab"]:hover {
+    color: #6366f1;
+}
+
+.stTabs [aria-selected="true"] {
+    color: #6366f1 !important;
+    border-bottom-color: #6366f1 !important;
+    font-weight: 600;
+}
+
+/* ── Dataframes ────────────────────────────────────────────────── */
+div[data-testid="stDataFrame"] {
+    border: 1px solid #e2e8f0;
+    border-radius: 12px;
+    overflow: hidden;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+}
+
+/* ── Alerts / Banners ──────────────────────────────────────────── */
+.stAlert {
+    border-radius: 10px !important;
+    border-left-width: 4px !important;
+}
+
+div[data-testid="stNotification"] {
+    border-radius: 10px;
+}
+
+/* ── Progress bar ──────────────────────────────────────────────── */
+.stProgress > div > div {
+    border-radius: 999px;
+    background: linear-gradient(90deg, #6366f1, #818cf8);
+}
+
+/* ── Inputs / Selects ──────────────────────────────────────────── */
+.stSelectbox > div > div,
+.stMultiSelect > div > div,
+.stTextInput > div > div > input,
+.stNumberInput > div > div > input {
+    border-radius: 8px !important;
+    border-color: #d1d5db !important;
+    transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.stSelectbox > div > div:focus-within,
+.stMultiSelect > div > div:focus-within,
+.stTextInput > div > div > input:focus,
+.stNumberInput > div > div > input:focus {
+    border-color: #6366f1 !important;
+    box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.15) !important;
+}
+
+/* ── Sliders ───────────────────────────────────────────────────── */
+.stSlider [data-baseweb="slider"] [role="slider"] {
+    background-color: #6366f1 !important;
+}
+
+/* ── Dividers ──────────────────────────────────────────────────── */
+hr {
+    border-color: #e2e8f0 !important;
+    margin: 1.5rem 0 !important;
+}
+
+/* ── Plotly charts container ───────────────────────────────────── */
+.stPlotlyChart {
+    border: 1px solid #e2e8f0;
+    border-radius: 12px;
+    padding: 8px;
+    background: #ffffff;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+    margin-bottom: 1rem;
+}
+
+/* ── Caption / small text ──────────────────────────────────────── */
+.stCaption, small {
+    color: #94a3b8 !important;
+}
+
+/* ── Expanders ─────────────────────────────────────────────────── */
+details[data-testid="stExpander"] {
+    border: 1px solid #e2e8f0 !important;
+    border-radius: 10px !important;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03);
+}
+
+/* ── Smooth scrolling ──────────────────────────────────────────── */
+html {
+    scroll-behavior: smooth;
+}
+
+/* ── Remove Streamlit branding (optional) ──────────────────────── */
+#MainMenu {visibility: hidden;}
+footer {visibility: hidden;}

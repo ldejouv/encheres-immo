@@ -128,7 +128,7 @@ def render():
                 df_display["mise_a_prix"] = df_display["mise_a_prix"].apply(
                     lambda x: f"{x:,.0f} EUR" if pd.notna(x) else ""
                 )
-            st.dataframe(df_display, use_container_width=True, hide_index=True)
+            st.dataframe(df_display, width="stretch", hide_index=True)
 
             if st.button("Marquer tout comme lu"):
                 match_ids = [m["match_id"] for m in matches]

@@ -111,7 +111,7 @@ def render():
         "Tribunal",
     ][: len(available)]
 
-    st.dataframe(df_display, use_container_width=True, hide_index=True)
+    st.dataframe(df_display, width="stretch", hide_index=True)
 
     # Detail view
     st.divider()
