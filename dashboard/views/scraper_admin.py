@@ -195,7 +195,7 @@ def render():
                         "Nombre max d'annonces",
                         min_value=10,
                         max_value=20000,
-                        value=min(stats["without_map_hist"], 20000),
+                        value=max(min(stats["without_map_hist"], 20000), 10),
                         step=100,
                         key=f"limit_{key}",
                     )
@@ -210,7 +210,7 @@ def render():
                         "Nombre max d'annonces",
                         min_value=10,
                         max_value=20000,
-                        value=min(stats["without_surface_hist"], 20000),
+                        value=max(min(stats["without_surface_hist"], 20000), 10),
                         step=100,
                         key=f"limit_{key}",
                     )
@@ -225,7 +225,7 @@ def render():
                         "Nombre max d'annonces",
                         min_value=10,
                         max_value=5000,
-                        value=min(stats["without_detail"], 5000),
+                        value=max(min(stats["without_detail"], 5000), 10),
                         step=50,
                         key=f"limit_{key}",
                     )
