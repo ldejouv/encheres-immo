@@ -405,7 +405,7 @@ def render():
         # so that Streamlit sorts on the actual numbers, not strings.
         st.dataframe(
             df_show,
-            use_container_width=True,
+            width="stretch",
             hide_index=True,
             height=500,
             column_config={
@@ -500,7 +500,7 @@ def render():
             hole=0.35,
         )
         fig_pie.update_traces(textinfo="percent+value")
-        st.plotly_chart(fig_pie, use_container_width=True)
+        st.plotly_chart(fig_pie, width="stretch")
 
         # ── Bar chart : nb de ventes par departement ──────────────────
         if df["department_code"].notna().any():
@@ -536,7 +536,7 @@ def render():
                 xaxis_title="Departement",
                 yaxis_title="Nombre",
             )
-            st.plotly_chart(fig_dept, use_container_width=True)
+            st.plotly_chart(fig_dept, width="stretch")
 
         # ── Histogram : distribution des prix finaux ──────────────────
         df_with_price = sold_df[sold_df["final_price"].notna() & (sold_df["final_price"] > 0)]
@@ -559,7 +559,7 @@ def render():
                 color_discrete_sequence=["#3498db"],
             )
             fig_hist.update_layout(yaxis_title="Nombre de biens")
-            st.plotly_chart(fig_hist, use_container_width=True)
+            st.plotly_chart(fig_hist, width="stretch")
 
         # ── Box plot : prix final par type de bien ────────────────────
         if not df_with_price.empty and df_with_price["property_type"].notna().any():
@@ -575,7 +575,7 @@ def render():
                     color="property_type",
                 )
                 fig_box.update_layout(showlegend=False)
-                st.plotly_chart(fig_box, use_container_width=True)
+                st.plotly_chart(fig_box, width="stretch")
 
         # ── Violin plot : mise a prix par statut ──────────────────────
         df_violin = df[df["mise_a_prix"].notna() & (df["mise_a_prix"] > 0)].copy()
@@ -591,7 +591,7 @@ def render():
                 color_discrete_map=COLOR_MAP,
             )
             fig_violin.update_layout(showlegend=False)
-            st.plotly_chart(fig_violin, use_container_width=True)
+            st.plotly_chart(fig_violin, width="stretch")
 
     # ================================================================
     # TAB 3 : Ratio analysis
@@ -631,7 +631,7 @@ def render():
             fig_r.add_vline(x=median_val, line_dash="dot", line_color="blue",
                             annotation_text=f"Median {median_val:.2f}x")
             fig_r.update_layout(yaxis_title="Nombre de biens")
-            st.plotly_chart(fig_r, use_container_width=True)
+            st.plotly_chart(fig_r, width="stretch")
 
             # Scatter : MAP vs prix final
             fig_scatter = px.scatter(
@@ -656,7 +656,7 @@ def render():
                 legend_title="Departement",
                 height=550,
             )
-            st.plotly_chart(fig_scatter, use_container_width=True)
+            st.plotly_chart(fig_scatter, width="stretch")
 
             # Ratio by property type (boxplot)
             if df_ratio["property_type"].notna().any():
@@ -673,7 +673,7 @@ def render():
                     )
                     fig_rbox.add_hline(y=1.0, line_dash="dash", line_color="gray")
                     fig_rbox.update_layout(showlegend=False)
-                    st.plotly_chart(fig_rbox, use_container_width=True)
+                    st.plotly_chart(fig_rbox, width="stretch")
 
             # Top gains / bargains
             st.subheader("Top encheres (plus forte hausse vs MAP)")
@@ -687,7 +687,7 @@ def render():
                     "final_price": "Prix final", "ratio": "Ratio",
                     "result_date": "Date",
                 }),
-                use_container_width=True, hide_index=True,
+                width="stretch", hide_index=True,
             )
 
             st.subheader("Biens vendus les moins chers (ratio le plus bas)")
@@ -701,7 +701,7 @@ def render():
                     "final_price": "Prix final", "ratio": "Ratio",
                     "result_date": "Date",
                 }),
-                use_container_width=True, hide_index=True,
+                width="stretch", hide_index=True,
             )
 
     # ================================================================
@@ -754,7 +754,7 @@ def render():
                 xaxis_title="Mois",
                 yaxis_title="Nombre",
             )
-            st.plotly_chart(fig_vol, use_container_width=True)
+            st.plotly_chart(fig_vol, width="stretch")
 
             # Price evolution
             monthly_with_price = monthly[monthly["avg_final"].notna()]
@@ -779,7 +779,7 @@ def render():
                     xaxis_title="Mois",
                     yaxis_title="EUR",
                 )
-                st.plotly_chart(fig_price, use_container_width=True)
+                st.plotly_chart(fig_price, width="stretch")
 
             # Ratio evolution
             monthly_with_ratio = monthly[monthly["median_ratio"].notna()]
@@ -801,7 +801,7 @@ def render():
                     xaxis_title="Mois",
                     yaxis_title="Ratio",
                 )
-                st.plotly_chart(fig_ratio_t, use_container_width=True)
+                st.plotly_chart(fig_ratio_t, width="stretch")
 
             # Success rate evolution
             monthly["taux_vente"] = monthly["nb_sold"] / monthly["nb_total"] * 100
@@ -821,7 +821,7 @@ def render():
                 yaxis_title="% vendus",
                 yaxis=dict(range=[0, 105]),
             )
-            st.plotly_chart(fig_rate, use_container_width=True)
+            st.plotly_chart(fig_rate, width="stretch")
 
     # ================================================================
     # TAB 5 : Geographic analysis
@@ -877,7 +877,7 @@ def render():
                 "taux_vente": "Taux vente",
             })
 
-            st.dataframe(dept_display, use_container_width=True, hide_index=True)
+            st.dataframe(dept_display, width="stretch", hide_index=True)
 
             # Scatter : taux de vente vs ratio median per department
             dept_scatter = dept_stats[
@@ -902,7 +902,7 @@ def render():
                 fig_dep_s.update_traces(textposition="top center")
                 fig_dep_s.add_hline(y=1.0, line_dash="dash", line_color="gray")
                 fig_dep_s.update_layout(height=500)
-                st.plotly_chart(fig_dep_s, use_container_width=True)
+                st.plotly_chart(fig_dep_s, width="stretch")
 
             # By tribunal
             if df["tribunal_name"].notna().any():
@@ -930,7 +930,7 @@ def render():
                     barmode="group",
                 )
                 fig_trib.update_layout(xaxis_tickangle=-45)
-                st.plotly_chart(fig_trib, use_container_width=True)
+                st.plotly_chart(fig_trib, width="stretch")
 
                 # Table
                 trib_display = trib_stats.copy()
@@ -951,4 +951,4 @@ def render():
                     "median_ratio": "Ratio median",
                     "taux_vente": "Taux vente",
                 })
-                st.dataframe(trib_display, use_container_width=True, hide_index=True)
+                st.dataframe(trib_display, width="stretch", hide_index=True)

@@ -105,4 +105,4 @@ def render():
     if df_adj.empty:
         st.info("Aucun resultat saisi.")
     else:
-        st.dataframe(df_adj, use_container_width=True, hide_index=True)
+        st.dataframe(df_adj, width="stretch", hide_index=True)
