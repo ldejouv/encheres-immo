@@ -11,10 +11,10 @@ venv/
 .venv/
 env/
 
-# Data files
-data/encheres.db
+# Data files (keep encheres.db tracked for cloud deployment)
 data/*.log
 data/*.json
+data/*.tmp
 
 # IDE
 .vscode/
