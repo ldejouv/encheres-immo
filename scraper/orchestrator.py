@@ -12,10 +12,14 @@ from db.database import Database
 from scraper.detail_scraper import DetailScraper
 from scraper.history_scraper import HistoryScraper
 from scraper.index_scraper import IndexScraper
-from scraper.progress import ProgressWriter
+from scraper.progress import ProgressWriter, _clear_cancel_flag
 from scraper.tribunal_scraper import TribunalScraper
 
 logger = logging.getLogger(__name__)
+
+
+class ScrapeCancelled(Exception):
+    """Raised when a user cancels a running scrape."""
 
 
 class ScrapingOrchestrator:
@@ -48,6 +52,8 @@ class ScrapingOrchestrator:
 
             # 2. Scrape each tribunal's listings
             for t in active:
+                if pw.is_cancel_requested():
+                    raise ScrapeCancelled()
                 try:
                     summaries = self.tribunal_scraper.scrape(t.url_path)
                     for s in summaries:
@@ -68,6 +74,8 @@ class ScrapingOrchestrator:
             if new_listing_ids:
                 pw.total = pw.processed + len(new_listing_ids) + 1
             for lid in new_listing_ids:
+                if pw.is_cancel_requested():
+                    raise ScrapeCancelled()
                 listing = self.db.get_listing_by_licitor_id(lid)
                 if listing and not listing["detail_scraped"]:
                     try:
@@ -86,10 +94,14 @@ class ScrapingOrchestrator:
             self._match_alerts(new_listing_ids)
 
             pw.finish()
+        except ScrapeCancelled:
+            pw.cancel()
+            logger.info("Incremental scrape cancelled by user.")
         except Exception as exc:
             pw.abort(str(exc))
             raise
         finally:
+            _clear_cancel_flag()
             self.db.finish_scrape_log(
                 log_id,
                 listings_new=len(new_listing_ids),
@@ -131,6 +143,8 @@ class ScrapingOrchestrator:
 
             # 2. Scrape each tribunal's history
             for i, tribunal in enumerate(tribunals, 1):
+                if pw.is_cancel_requested():
+                    raise ScrapeCancelled()
                 slug = tribunal["slug"]
                 start_url = tribunal["url_path"]
                 total_expected = tribunal["total_count"]
@@ -180,10 +194,14 @@ class ScrapingOrchestrator:
                     pw.tick(error=True, current_item=slug)
 
             pw.finish()
+        except ScrapeCancelled:
+            pw.cancel()
+            logger.info("History backfill cancelled by user.")
         except Exception as exc:
             pw.abort(str(exc))
             raise
         finally:
+            _clear_cancel_flag()
             self.db.finish_scrape_log(
                 log_id,
                 pages_scraped=total_pages,
@@ -211,6 +229,8 @@ class ScrapingOrchestrator:
             pw = ProgressWriter("map_backfill", total=len(listings))
 
             for i, listing in enumerate(listings, 1):
+                if pw.is_cancel_requested():
+                    raise ScrapeCancelled()
                 lid = listing["licitor_id"]
                 url = listing["url_path"]
                 try:
@@ -234,10 +254,14 @@ class ScrapingOrchestrator:
                     pw.tick(error=True, current_item=f"#{lid} ERREUR")
 
             pw.finish()
+        except ScrapeCancelled:
+            pw.cancel()
+            logger.info("MAP backfill cancelled by user.")
         except Exception as exc:
             pw.abort(str(exc))
             raise
         finally:
+            _clear_cancel_flag()
             self.db.finish_scrape_log(
                 log_id,
                 pages_scraped=updated + not_found + errors,
@@ -265,6 +289,8 @@ class ScrapingOrchestrator:
             pw = ProgressWriter("surface_backfill", total=len(listings))
 
             for i, listing in enumerate(listings, 1):
+                if pw.is_cancel_requested():
+                    raise ScrapeCancelled()
                 lid = listing["licitor_id"]
                 url = listing["url_path"]
                 try:
@@ -288,10 +314,14 @@ class ScrapingOrchestrator:
                     pw.tick(error=True, current_item=f"#{lid} ERREUR")
 
             pw.finish()
+        except ScrapeCancelled:
+            pw.cancel()
+            logger.info("Surface backfill cancelled by user.")
         except Exception as exc:
             pw.abort(str(exc))
             raise
         finally:
+            _clear_cancel_flag()
             self.db.finish_scrape_log(
                 log_id,
                 pages_scraped=updated + not_found + errors,
@@ -310,16 +340,21 @@ class ScrapingOrchestrator:
         log_id = self.db.start_scrape_log("detail_backfill")
         updated = 0
         errors = 0
+        pw = ProgressWriter("detail_backfill", total=1)
 
         try:
             listings = self.db.get_listings_without_detail(limit=limit)
             logger.info("Detail backfill: %d listings to process", len(listings))
+            pw.total = len(listings)
 
             for listing in listings:
+                if pw.is_cancel_requested():
+                    raise ScrapeCancelled()
                 try:
                     detail = self.detail_scraper.scrape(listing["url_path"])
                     self.db.update_listing_detail(detail)
                     updated += 1
+                    pw.tick(updated=True, current_item=f"#{listing['licitor_id']}")
                 except Exception as e:
                     logger.error(
                         "Detail scrape failed for %s: %s",
@@ -327,7 +362,17 @@ class ScrapingOrchestrator:
                         e,
                     )
                     errors += 1
+                    pw.tick(error=True, current_item=f"#{listing['licitor_id']} ERREUR")
+
+            pw.finish()
+        except ScrapeCancelled:
+            pw.cancel()
+            logger.info("Detail backfill cancelled by user.")
+        except Exception as exc:
+            pw.abort(str(exc))
+            raise
         finally:
+            _clear_cancel_flag()
             self.db.finish_scrape_log(
                 log_id,
                 listings_updated=updated,
