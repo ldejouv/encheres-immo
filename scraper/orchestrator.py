@@ -383,10 +383,10 @@ class ScrapingOrchestrator:
 
     def run_full(self, detail_limit: int = 500):
         """Unified process: upcoming auctions + detail/MAP/surface backfill."""
-        log_id = self.db.start_scrape_log("full")
         new_listing_ids: list[int] = []
         errors = 0
 
+        log_id = self.db.start_scrape_log("full")
         pw = ProgressWriter("full", total=1)
 
         try:
