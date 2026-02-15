@@ -19,6 +19,7 @@ _PROJECT_ROOT = str(Path(__file__).resolve().parent.parent.parent)
 # ── Job definitions ──────────────────────────────────────────────────
 
 JOB_TYPE_LABELS = {
+    "full": "Scraping complet",
     "incremental": "Scrape incrementiel",
     "history": "Historique des adjudications",
     "map_backfill": "Backfill mises a prix",
@@ -70,7 +71,9 @@ def _launch_job(mode: str, limit: int | None = None):
 
     def _run():
         try:
-            if mode == "incremental":
+            if mode == "full":
+                orchestrator.run_full(detail_limit=limit or 500)
+            elif mode == "incremental":
                 orchestrator.run_incremental()
             elif mode == "history":
                 orchestrator.run_history_backfill()
@@ -184,65 +187,80 @@ def render_scraper_tab():
         st.divider()
 
     # ── Job launcher ─────────────────────────────────────────────────
-    st.subheader("Lancer un scraper")
+    st.subheader("Lancer un scraping")
 
     if running:
         st.warning("Un scraper est deja en cours d'execution. Attendez qu'il termine ou arretez-le.")
     else:
-        tabs = st.tabs([j["label"] for j in JOBS.values()])
+        st.markdown(
+            "Scrape toutes les encheres a venir (toutes dates d'audience), "
+            "puis complete les details manquants (surface, mise a prix)."
+        )
 
-        for tab, (key, job) in zip(tabs, JOBS.items()):
-            with tab:
-                st.markdown(f"{job['icon']} **{job['label']}**")
-                st.caption(job["description"])
+        full_limit = st.number_input(
+            "Limite de backfill par phase",
+            min_value=10,
+            max_value=20000,
+            value=500,
+            step=100,
+            key="full_limit",
+        )
 
-                if key == "map_backfill":
-                    limit = st.number_input(
-                        "Nombre max d'annonces",
-                        min_value=10,
-                        max_value=20000,
-                        value=max(min(stats["without_map_hist"], 20000), 10),
-                        step=100,
-                        key=f"limit_{key}",
-                    )
-                    if st.button(f"Lancer {job['label']}", key=f"btn_{key}", type="primary"):
-                        _launch_job("map-backfill", limit=limit)
-                        st.success(f"{job['label']} lance ! Rechargez la page pour voir la progression.")
-                        st.rerun()
+        if st.button("Lancer le scraping complet", type="primary", key="btn_full"):
+            _launch_job("full", limit=full_limit)
+            st.rerun()
 
-                elif key == "surface_backfill":
-                    limit = st.number_input(
-                        "Nombre max d'annonces",
-                        min_value=10,
-                        max_value=20000,
-                        value=max(min(stats["without_surface_hist"], 20000), 10),
-                        step=100,
-                        key=f"limit_{key}",
-                    )
-                    if st.button(f"Lancer {job['label']}", key=f"btn_{key}", type="primary"):
-                        _launch_job("surface-backfill", limit=limit)
-                        st.success(f"{job['label']} lance ! Rechargez la page pour voir la progression.")
-                        st.rerun()
+        with st.expander("Actions individuelles"):
+            tabs = st.tabs([j["label"] for j in JOBS.values()])
 
-                elif key == "backfill":
-                    limit = st.number_input(
-                        "Nombre max d'annonces",
-                        min_value=10,
-                        max_value=5000,
-                        value=max(min(stats["without_detail"], 5000), 10),
-                        step=50,
-                        key=f"limit_{key}",
-                    )
-                    if st.button(f"Lancer {job['label']}", key=f"btn_{key}", type="primary"):
-                        _launch_job("backfill", limit=limit)
-                        st.success(f"{job['label']} lance !")
-                        st.rerun()
+            for tab, (key, job) in zip(tabs, JOBS.items()):
+                with tab:
+                    st.markdown(f"{job['icon']} **{job['label']}**")
+                    st.caption(job["description"])
 
-                else:
-                    if st.button(f"Lancer {job['label']}", key=f"btn_{key}", type="primary"):
-                        _launch_job(key)
-                        st.success(f"{job['label']} lance !")
-                        st.rerun()
+                    if key == "map_backfill":
+                        limit = st.number_input(
+                            "Nombre max d'annonces",
+                            min_value=10,
+                            max_value=20000,
+                            value=max(min(stats["without_map_hist"], 20000), 10),
+                            step=100,
+                            key=f"limit_{key}",
+                        )
+                        if st.button(f"Lancer {job['label']}", key=f"btn_{key}"):
+                            _launch_job("map-backfill", limit=limit)
+                            st.rerun()
+
+                    elif key == "surface_backfill":
+                        limit = st.number_input(
+                            "Nombre max d'annonces",
+                            min_value=10,
+                            max_value=20000,
+                            value=max(min(stats["without_surface_hist"], 20000), 10),
+                            step=100,
+                            key=f"limit_{key}",
+                        )
+                        if st.button(f"Lancer {job['label']}", key=f"btn_{key}"):
+                            _launch_job("surface-backfill", limit=limit)
+                            st.rerun()
+
+                    elif key == "backfill":
+                        limit = st.number_input(
+                            "Nombre max d'annonces",
+                            min_value=10,
+                            max_value=5000,
+                            value=max(min(stats["without_detail"], 5000), 10),
+                            step=50,
+                            key=f"limit_{key}",
+                        )
+                        if st.button(f"Lancer {job['label']}", key=f"btn_{key}"):
+                            _launch_job("backfill", limit=limit)
+                            st.rerun()
+
+                    else:
+                        if st.button(f"Lancer {job['label']}", key=f"btn_{key}"):
+                            _launch_job(key)
+                            st.rerun()
 
 
 def _render_progress(p: dict):

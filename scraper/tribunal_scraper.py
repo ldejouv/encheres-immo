@@ -54,19 +54,11 @@ class TribunalScraper(BaseScraper):
                 urls.append(link["href"].split("#")[0])
         return urls
 
-    def scrape(self, tribunal_url: str, _visited: set | None = None) -> list[ListingSummary]:
-        if _visited is None:
-            _visited = set()
-
-        clean_url = tribunal_url.split("?")[0]
-        if clean_url in _visited:
-            return []
-        _visited.add(clean_url)
-
-        soup = self.fetch(tribunal_url)
+    def _parse_listings(self, soup, source_url: str) -> list[ListingSummary]:
+        """Parse listing summaries from a single page's AdResults list."""
         results_list = soup.find("ul", class_="AdResults")
         if not results_list:
-            self.logger.warning("No AdResults found on %s", tribunal_url)
+            self.logger.warning("No AdResults found on %s", source_url)
             return []
 
         summaries = []
@@ -130,21 +122,40 @@ class TribunalScraper(BaseScraper):
                 )
             )
 
-        self.logger.info("Found %d listings on %s", len(summaries), tribunal_url)
+        self.logger.info("Found %d listings on %s", len(summaries), source_url)
+        return summaries
 
-        # Handle pagination: check for next page
-        next_link = soup.find("a", class_="Next PageNav")
-        if next_link and next_link.get("href"):
-            next_url = next_link["href"]
-            self.logger.info("Following pagination to %s", next_url)
-            summaries.extend(self.scrape(next_url, _visited=_visited))
+    def scrape(self, tribunal_url: str, _visited: set | None = None) -> list[ListingSummary]:
+        is_initial = _visited is None
+        if is_initial:
+            _visited = set()
 
-        # Discover and scrape other upcoming hearing dates (only from initial page)
-        if len(_visited) == 1:
-            other_urls = self._get_upcoming_hearing_urls(soup)
-            for url in other_urls:
-                if url.split("?")[0] not in _visited:
-                    self.logger.info("Discovered hearing date: %s", url)
-                    summaries.extend(self.scrape(url, _visited=_visited))
+        base_url = tribunal_url.split("?")[0].split("#")[0]
+        if base_url in _visited:
+            return []
+        _visited.add(base_url)
+
+        # Scrape all pages of this hearing date (pagination = while loop)
+        summaries: list[ListingSummary] = []
+        current_url = tribunal_url
+        first_soup = None
+
+        while current_url:
+            soup = self.fetch(current_url)
+            if first_soup is None:
+                first_soup = soup
+            summaries.extend(self._parse_listings(soup, current_url))
+
+            next_link = soup.find("a", class_="Next PageNav")
+            if next_link and next_link.get("href"):
+                current_url = next_link["href"]
+                self.logger.info("Following pagination to %s", current_url)
+            else:
+                current_url = None
+
+        # Discover and scrape other hearing dates (only from the initial call)
+        if is_initial and first_soup:
+            for url in self._get_upcoming_hearing_urls(first_soup):
+                summaries.extend(self.scrape(url, _visited=_visited))
 
         return summaries

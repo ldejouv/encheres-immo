@@ -1,6 +1,7 @@
 """Tests for tribunal scraper listing parsing and hearing date discovery."""
 
 import sys
+import logging
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
@@ -18,11 +19,18 @@ def _load_fixture(name: str) -> BeautifulSoup:
     return BeautifulSoup(html, "lxml")
 
 
+def _make_scraper() -> TribunalScraper:
+    """Create a TribunalScraper instance without full init (no HTTP session)."""
+    scraper = TribunalScraper.__new__(TribunalScraper)
+    scraper.logger = logging.getLogger("test_tribunal_scraper")
+    return scraper
+
+
 class TestGetUpcomingHearingUrls:
     """Test the _get_upcoming_hearing_urls method."""
 
     def setup_method(self):
-        self.scraper = TribunalScraper.__new__(TribunalScraper)
+        self.scraper = _make_scraper()
 
     def test_extracts_all_hearing_dates(self):
         soup = _load_fixture("tribunal_page.html")
@@ -63,25 +71,33 @@ class TestGetUpcomingHearingUrls:
 
 
 class TestParseListings:
-    """Test listing parsing from the fixture page."""
+    """Test _parse_listings method via the fixture page."""
 
     def setup_method(self):
-        self.scraper = TribunalScraper.__new__(TribunalScraper)
+        self.scraper = _make_scraper()
 
-    def test_parses_listings_from_fixture(self):
+    def test_parse_listings_returns_summaries(self):
         soup = _load_fixture("tribunal_page.html")
-        results_list = soup.find("ul", class_="AdResults")
-        assert results_list is not None
-        listings = results_list.find_all("li", recursive=False)
-        assert len(listings) == 5
+        summaries = self.scraper._parse_listings(soup, "/test-url")
+        assert len(summaries) == 5
 
-    def test_first_listing_details(self):
-        """Verify the first listing in the fixture is parsed correctly."""
+    def test_first_listing_fields(self):
         soup = _load_fixture("tribunal_page.html")
-        results_list = soup.find("ul", class_="AdResults")
-        first_li = results_list.find_all("li", recursive=False)[0]
-        link = first_li.find("a")
-        assert link is not None
-        assert "106898" in link["href"]
-        assert first_li.find("span", class_="Number").get_text(strip=True) == "13"
-        assert first_li.find("span", class_="City").get_text(strip=True) == "Cuges-les-Pins"
+        summaries = self.scraper._parse_listings(soup, "/test-url")
+        first = summaries[0]
+        assert first.licitor_id == 106898
+        assert first.department_code == "13"
+        assert first.city == "Cuges-les-Pins"
+        assert first.property_type == "Une maison d'habitation"
+        assert first.mise_a_prix == 228800
+
+    def test_paris_listings(self):
+        soup = _load_fixture("tribunal_page.html")
+        summaries = self.scraper._parse_listings(soup, "/test-url")
+        paris = [s for s in summaries if s.department_code == "75"]
+        assert len(paris) == 4
+
+    def test_empty_page(self):
+        soup = BeautifulSoup("<html><body></body></html>", "lxml")
+        summaries = self.scraper._parse_listings(soup, "/test-url")
+        assert summaries == []

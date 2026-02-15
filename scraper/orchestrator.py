@@ -381,6 +381,121 @@ class ScrapingOrchestrator:
 
         logger.info("Detail backfill: %d updated, %d errors", updated, errors)
 
+    def run_full(self, detail_limit: int = 500):
+        """Unified process: upcoming auctions + detail/MAP/surface backfill."""
+        log_id = self.db.start_scrape_log("full")
+        new_listing_ids: list[int] = []
+        errors = 0
+
+        pw = ProgressWriter("full", total=1)
+
+        try:
+            # ── Phase 1: Index (discover tribunals) ──────────────────
+            tribunals = self.index_scraper.scrape()
+            self.db.upsert_tribunals(tribunals)
+            logger.info("Found %d tribunals", len(tribunals))
+
+            active = [t for t in tribunals if t.auction_count > 0]
+            pw.total = len(active)
+
+            # ── Phase 2: Scrape upcoming auctions ────────────────────
+            for t in active:
+                if pw.is_cancel_requested():
+                    raise ScrapeCancelled()
+                try:
+                    summaries = self.tribunal_scraper.scrape(t.url_path)
+                    for s in summaries:
+                        is_new = self.db.upsert_listing_summary(
+                            s, tribunal_slug=t.slug
+                        )
+                        if is_new:
+                            new_listing_ids.append(s.licitor_id)
+                    pw.tick(updated=True, current_item=f"Tribunal: {t.slug}")
+                except Exception as e:
+                    logger.error("Error scraping tribunal %s: %s", t.slug, e)
+                    errors += 1
+                    pw.tick(error=True, current_item=t.slug)
+
+            logger.info("Found %d new listings", len(new_listing_ids))
+
+            self.db.mark_past_auctions()
+            self._match_alerts(new_listing_ids)
+
+            # ── Phase 3: Detail backfill (includes surface + MAP) ────
+            listings = self.db.get_listings_without_detail(limit=detail_limit)
+            if listings:
+                pw.total = pw.processed + len(listings)
+                for listing in listings:
+                    if pw.is_cancel_requested():
+                        raise ScrapeCancelled()
+                    try:
+                        detail = self.detail_scraper.scrape(listing["url_path"])
+                        self.db.update_listing_detail(detail)
+                        pw.tick(updated=True, current_item=f"Detail #{listing['licitor_id']}")
+                    except Exception as e:
+                        logger.error("Detail failed for %s: %s", listing["licitor_id"], e)
+                        errors += 1
+                        pw.tick(error=True, current_item=f"#{listing['licitor_id']}")
+
+            # ── Phase 4: MAP backfill (historical without mise_a_prix) ─
+            listings_map = self.db.get_listings_without_mise_a_prix(limit=detail_limit)
+            if listings_map:
+                pw.total = pw.processed + len(listings_map)
+                for listing in listings_map:
+                    if pw.is_cancel_requested():
+                        raise ScrapeCancelled()
+                    try:
+                        map_val = self.detail_scraper.scrape_mise_a_prix(listing["url_path"])
+                        if map_val and map_val > 0:
+                            self.db.update_listing_mise_a_prix(listing["licitor_id"], map_val)
+                            pw.tick(updated=True, current_item=f"MAP #{listing['licitor_id']}")
+                        else:
+                            pw.tick(not_found=True, current_item=f"MAP #{listing['licitor_id']}")
+                    except Exception as e:
+                        logger.error("MAP backfill failed for %d: %s", listing["licitor_id"], e)
+                        errors += 1
+                        pw.tick(error=True, current_item=f"MAP #{listing['licitor_id']}")
+
+            # ── Phase 5: Surface backfill (historical without surface) ─
+            listings_surf = self.db.get_listings_without_surface(limit=detail_limit)
+            if listings_surf:
+                pw.total = pw.processed + len(listings_surf)
+                for listing in listings_surf:
+                    if pw.is_cancel_requested():
+                        raise ScrapeCancelled()
+                    try:
+                        surf = self.detail_scraper.scrape_surface(listing["url_path"])
+                        if surf and surf > 0:
+                            self.db.update_listing_surface(listing["licitor_id"], surf)
+                            pw.tick(updated=True, current_item=f"Surf #{listing['licitor_id']}")
+                        else:
+                            pw.tick(not_found=True, current_item=f"Surf #{listing['licitor_id']}")
+                    except Exception as e:
+                        logger.error("Surface backfill failed for %d: %s", listing["licitor_id"], e)
+                        errors += 1
+                        pw.tick(error=True, current_item=f"Surf #{listing['licitor_id']}")
+
+            pw.finish()
+        except ScrapeCancelled:
+            pw.cancel()
+            logger.info("Full scrape cancelled by user.")
+        except Exception as exc:
+            pw.abort(str(exc))
+            raise
+        finally:
+            _clear_cancel_flag()
+            self.db.finish_scrape_log(
+                log_id,
+                listings_new=len(new_listing_ids),
+                errors=errors,
+            )
+
+        logger.info(
+            "Full scrape complete: %d new, %d errors",
+            len(new_listing_ids),
+            errors,
+        )
+
     def _match_alerts(self, licitor_ids: list[int]):
         """Run all active alerts against newly scraped listings."""
         from analysis.alerts import AlertEngine
