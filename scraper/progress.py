@@ -216,6 +216,28 @@ def is_job_running() -> bool:
     return True
 
 
+def mark_error(message: str = ""):
+    """Mark a running progress entry as error.
+
+    Fallback for when the scraper thread crashes before its
+    ProgressWriter can record the failure (e.g. exception before
+    the try block in run_full).
+    """
+    if not _PROGRESS_FILE.exists():
+        return
+    try:
+        data = json.loads(_PROGRESS_FILE.read_text(encoding="utf-8"))
+        if data.get("status") == "running":
+            data["status"] = "error"
+            data["error_message"] = message or "Thread crashed unexpectedly"
+            data["last_flush_ts"] = _now_ts()
+            tmp = _PROGRESS_FILE.with_suffix(".tmp")
+            tmp.write_text(json.dumps(data, ensure_ascii=False), encoding="utf-8")
+            tmp.replace(_PROGRESS_FILE)
+    except (json.JSONDecodeError, OSError):
+        pass
+
+
 def clear_progress():
     """Remove the progress file."""
     if _PROGRESS_FILE.exists():

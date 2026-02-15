@@ -12,7 +12,7 @@ import streamlit as st
 
 from db.database import Database
 from scraper.orchestrator import ScrapingOrchestrator
-from scraper.progress import read_progress, is_job_running, clear_progress, request_cancel, init_progress
+from scraper.progress import read_progress, is_job_running, clear_progress, request_cancel, init_progress, mark_error
 
 _PROJECT_ROOT = str(Path(__file__).resolve().parent.parent.parent)
 
@@ -61,20 +61,22 @@ JOBS = {
 def _launch_job(mode: str, limit: int | None = None):
     """Launch a scraper job in a background thread (works on Streamlit Cloud)."""
     # Write progress file SYNCHRONOUSLY so the UI sees it on the next rerun.
-    # Previously clear_progress() deleted the file, causing a race condition
-    # where st.rerun() would fire before the thread had written anything.
     init_progress(mode)
 
     logging.basicConfig(
         level=logging.INFO,
         format="%(asctime)s %(name)s %(levelname)s %(message)s",
     )
-    db = Database()
-    db.initialize()
-    orchestrator = ScrapingOrchestrator()
 
     def _run():
         try:
+            # All initialisation inside the thread so that failures are
+            # caught and reported to the progress file instead of being
+            # silently swallowed while the UI shows "nothing happened".
+            db = Database()
+            db.initialize()
+            orchestrator = ScrapingOrchestrator()
+
             if mode == "full":
                 orchestrator.run_full(detail_limit=limit or 500)
             elif mode == "incremental":
@@ -87,12 +89,15 @@ def _launch_job(mode: str, limit: int | None = None):
                 orchestrator.run_surface_backfill(limit=limit or 500)
             elif mode == "backfill":
                 orchestrator.run_detail_backfill(limit=limit or 100)
-        except Exception:
+        except Exception as exc:
             logging.getLogger(__name__).exception("Scraper job '%s' failed", mode)
+            # Ensure the progress file reflects the error so the UI can
+            # display it.  Without this, a crash before ProgressWriter.abort()
+            # leaves the file in "running" status and the UI shows nothing.
+            mark_error(str(exc))
 
     thread = threading.Thread(target=_run, daemon=True)
     thread.start()
-    # Store thread reference for additional liveness checking
     st.session_state["_scraper_thread"] = thread
 
 
@@ -185,11 +190,13 @@ def render_scraper_tab():
     progress = read_progress()
     running = is_job_running()
 
-    # Additional thread liveness check: if the thread object is available
-    # and has died, but the progress file still says "running", mark stale.
+    # Thread liveness check: if the thread has died but the progress file
+    # still says "running", mark it as an error so the UI can display it.
     thread = st.session_state.get("_scraper_thread")
     if running and thread is not None and not thread.is_alive():
         running = False
+        mark_error("Le thread du scraper s'est arrete de maniere inattendue.")
+        progress = read_progress()  # re-read with updated status
 
     if running and progress:
         _render_progress(progress)
@@ -313,7 +320,10 @@ def _render_progress(p: dict):
 
     # Progress bar
     pct = p.get("progress_pct", 0)
-    st.progress(min(pct / 100.0, 1.0), text=f"{pct:.1f}% ({p['processed']:,} / {p['total']:,})")
+    if p["total"] > 0:
+        st.progress(min(pct / 100.0, 1.0), text=f"{pct:.1f}% ({p['processed']:,} / {p['total']:,})")
+    else:
+        st.progress(0.0, text="Initialisation en cours...")
 
     # KPI cards
     c1, c2, c3, c4 = st.columns(4)
