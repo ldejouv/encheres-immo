@@ -36,7 +36,33 @@ class TribunalScraper(BaseScraper):
         </li>
     """
 
-    def scrape(self, tribunal_url: str) -> list[ListingSummary]:
+    def _get_upcoming_hearing_urls(self, soup) -> list[str]:
+        """Extract additional hearing date URLs from traversing-hearings section."""
+        traversing = soup.find("div", id="traversing-hearings")
+        if not traversing:
+            return []
+        ul = traversing.find("ul")
+        if not ul:
+            return []
+        urls: list[str] = []
+        for li in ul.find_all("li", recursive=False):
+            classes = li.get("class", [])
+            if any(c in classes for c in ("Previous", "Next", "Empty")):
+                continue
+            link = li.find("a")
+            if link and link.get("href"):
+                urls.append(link["href"].split("#")[0])
+        return urls
+
+    def scrape(self, tribunal_url: str, _visited: set | None = None) -> list[ListingSummary]:
+        if _visited is None:
+            _visited = set()
+
+        clean_url = tribunal_url.split("?")[0]
+        if clean_url in _visited:
+            return []
+        _visited.add(clean_url)
+
         soup = self.fetch(tribunal_url)
         results_list = soup.find("ul", class_="AdResults")
         if not results_list:
@@ -111,6 +137,14 @@ class TribunalScraper(BaseScraper):
         if next_link and next_link.get("href"):
             next_url = next_link["href"]
             self.logger.info("Following pagination to %s", next_url)
-            summaries.extend(self.scrape(next_url))
+            summaries.extend(self.scrape(next_url, _visited=_visited))
+
+        # Discover and scrape other upcoming hearing dates (only from initial page)
+        if len(_visited) == 1:
+            other_urls = self._get_upcoming_hearing_urls(soup)
+            for url in other_urls:
+                if url.split("?")[0] not in _visited:
+                    self.logger.info("Discovered hearing date: %s", url)
+                    summaries.extend(self.scrape(url, _visited=_visited))
 
         return summaries
