@@ -33,7 +33,7 @@ def render():
 
     st.divider()
 
-    # Filters — inline in central panel
+    # Filters
     df_all = metrics.get_upcoming_listings()
 
     with st.expander("Filtres", expanded=False):
@@ -75,65 +75,74 @@ def render():
 
     st.subheader(f"{len(df)} annonces")
 
-    # Display columns
-    display_cols = [
-        "licitor_id",
-        "city",
-        "department_code",
-        "property_type",
-        "mise_a_prix",
-        "surface_m2",
-        "auction_date",
-        "tribunal_name",
-    ]
-    available = [c for c in display_cols if c in df.columns]
-    df_display = df[available].copy()
-
-    # Format
-    if "mise_a_prix" in df_display.columns:
-        df_display["mise_a_prix"] = df_display["mise_a_prix"].apply(
-            lambda x: f"{x:,.0f} EUR" if pd.notna(x) else ""
-        )
-    if "surface_m2" in df_display.columns:
-        df_display["surface_m2"] = df_display["surface_m2"].apply(
-            lambda x: f"{x:.1f} m2" if pd.notna(x) else ""
-        )
-
-    df_display.columns = [
-        "N.",
-        "Ville",
-        "Dept",
-        "Type",
-        "Mise a prix",
-        "Surface",
-        "Date",
-        "Tribunal",
-    ][: len(available)]
-
-    st.dataframe(df_display, width="stretch", hide_index=True)
-
-    # Detail view
-    st.divider()
-    st.subheader("Detail d'une annonce")
-    selected_id = st.selectbox(
-        "Selectionner une annonce",
-        df["licitor_id"].tolist(),
-        format_func=lambda x: f"N.{x} - {df[df['licitor_id'] == x].iloc[0]['city'] if not df[df['licitor_id'] == x].empty else ''}",
+    # Build display dataframe with Licitor links
+    df_display = df.copy()
+    df_display["licitor_url"] = df_display["url_path"].apply(
+        lambda p: f"https://www.licitor.com{p}" if pd.notna(p) and p else None
     )
 
-    if selected_id:
-        row = df[df["licitor_id"] == selected_id].iloc[0]
-        col1, col2 = st.columns(2)
-        with col1:
-            st.markdown(f"**Type:** {row.get('property_type', 'N/A')}")
-            st.markdown(f"**Ville:** {row.get('city', 'N/A')} ({row.get('department_code', '')})")
-            st.markdown(f"**Mise a prix:** {row.get('mise_a_prix', 'N/A'):,.0f} EUR" if pd.notna(row.get('mise_a_prix')) else "**Mise a prix:** N/A")
-            st.markdown(f"**Surface:** {row.get('surface_m2', 'N/A')}")
-            st.markdown(f"**Date:** {row.get('auction_date', 'N/A')}")
-        with col2:
-            st.markdown(f"**Tribunal:** {row.get('tribunal_name', 'N/A')}")
-            st.markdown(f"**Avocat:** {row.get('lawyer_name', 'N/A')}")
-            st.markdown(f"**Tel:** {row.get('lawyer_phone', 'N/A')}")
-            st.markdown(f"**Adresse:** {row.get('full_address', 'N/A')}")
-            if pd.notna(row.get("url_path")):
-                st.markdown(f"[Voir sur Licitor](https://www.licitor.com{row['url_path']})")
+    display_cols = [
+        "licitor_id", "city", "department_code", "property_type",
+        "mise_a_prix", "surface_m2", "auction_date", "tribunal_name", "licitor_url",
+    ]
+    available = [c for c in display_cols if c in df_display.columns]
+    df_show = df_display[available].copy()
+
+    col_names = {
+        "licitor_id": "N.",
+        "city": "Ville",
+        "department_code": "Dept",
+        "property_type": "Type",
+        "mise_a_prix": "Mise a prix",
+        "surface_m2": "Surface",
+        "auction_date": "Date",
+        "tribunal_name": "Tribunal",
+        "licitor_url": "Lien",
+    }
+    df_show = df_show.rename(columns=col_names)
+
+    _row_height = 35
+    _table_height = max(400, min(len(df_show), 30) * _row_height + 40)
+
+    st.dataframe(
+        df_show,
+        use_container_width=True,
+        hide_index=True,
+        height=_table_height,
+        column_config={
+            "Mise a prix": st.column_config.NumberColumn(
+                "Mise a prix", format="euro",
+            ),
+            "Surface": st.column_config.NumberColumn(
+                "Surface", format="%.1f m2",
+            ),
+            "Lien": st.column_config.LinkColumn(
+                "Lien", display_text="Voir",
+            ),
+        },
+    )
+
+    # Detail view in expander
+    with st.expander("Detail d'une annonce", expanded=False):
+        selected_id = st.selectbox(
+            "Selectionner une annonce",
+            df["licitor_id"].tolist(),
+            format_func=lambda x: f"N.{x} - {df[df['licitor_id'] == x].iloc[0]['city'] if not df[df['licitor_id'] == x].empty else ''}",
+        )
+
+        if selected_id:
+            row = df[df["licitor_id"] == selected_id].iloc[0]
+            col1, col2 = st.columns(2)
+            with col1:
+                st.markdown(f"**Type:** {row.get('property_type', 'N/A')}")
+                st.markdown(f"**Ville:** {row.get('city', 'N/A')} ({row.get('department_code', '')})")
+                st.markdown(f"**Mise a prix:** {row.get('mise_a_prix', 'N/A'):,.0f} EUR" if pd.notna(row.get('mise_a_prix')) else "**Mise a prix:** N/A")
+                st.markdown(f"**Surface:** {row.get('surface_m2', 'N/A')}")
+                st.markdown(f"**Date:** {row.get('auction_date', 'N/A')}")
+            with col2:
+                st.markdown(f"**Tribunal:** {row.get('tribunal_name', 'N/A')}")
+                st.markdown(f"**Avocat:** {row.get('lawyer_name', 'N/A')}")
+                st.markdown(f"**Tel:** {row.get('lawyer_phone', 'N/A')}")
+                st.markdown(f"**Adresse:** {row.get('full_address', 'N/A')}")
+                if pd.notna(row.get("url_path")):
+                    st.markdown(f"[Voir sur Licitor](https://www.licitor.com{row['url_path']})")

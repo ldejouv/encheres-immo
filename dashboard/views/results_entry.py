@@ -13,23 +13,29 @@ from db.database import Database
 
 
 def render():
-    st.header("Saisie des resultats d'adjudication")
+    """Legacy entry point — redirects to admin.py composite page."""
+    from dashboard.views.admin import render as render_admin
+    render_admin()
+
+
+def render_results_tab():
+    """Render the results entry tab (embedded in admin page)."""
+    db = Database()
+    metrics = AuctionMetrics(db)
+
     st.markdown(
         "Licitor ne publie pas les prix finaux. Saisissez manuellement les resultats "
         "pour alimenter les analyses de ratios prix final / mise a prix."
     )
-
-    db = Database()
-    metrics = AuctionMetrics(db)
 
     # Search for a listing
     st.subheader("Rechercher un bien")
 
     col1, col2 = st.columns(2)
     with col1:
-        search_id = st.number_input("Numero d'annonce", min_value=0, step=1)
+        search_id = st.number_input("Numero d'annonce", min_value=0, step=1, key="admin_results_search_id")
     with col2:
-        search_city = st.text_input("Ville (partiel)")
+        search_city = st.text_input("Ville (partiel)", key="admin_results_search_city")
 
     listing = None
     if search_id > 0:
@@ -52,6 +58,7 @@ def render():
                         f"{results[i].get('property_type', '')} - "
                         f"{results[i].get('mise_a_prix', 'N/A')} EUR"
                     ),
+                    key="admin_results_select",
                 )
                 listing = results[selected]
             else:
@@ -74,14 +81,14 @@ def render():
 
         st.divider()
 
-        with st.form("adjudication_form"):
+        with st.form("admin_results_adjudication_form"):
             final_price = st.number_input(
                 "Prix final d'adjudication (EUR)",
-                min_value=0,
-                step=1_000,
+                min_value=0, step=1_000,
+                key="admin_results_final_price",
             )
-            price_source = st.selectbox("Source", ["manual", "external", "estimated"])
-            notes = st.text_area("Notes", placeholder="Ex: Adjuge a un investisseur")
+            price_source = st.selectbox("Source", ["manual", "external", "estimated"], key="admin_results_source")
+            notes = st.text_area("Notes", placeholder="Ex: Adjuge a un investisseur", key="admin_results_notes")
 
             submitted = st.form_submit_button("Enregistrer le resultat")
 
@@ -105,4 +112,4 @@ def render():
     if df_adj.empty:
         st.info("Aucun resultat saisi.")
     else:
-        st.dataframe(df_adj, width="stretch", hide_index=True)
+        st.dataframe(df_adj, use_container_width=True, hide_index=True)
