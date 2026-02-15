@@ -182,6 +182,9 @@ def render_scraper_tab():
     if running and progress:
         _render_progress(progress)
         st.divider()
+        # Auto-refresh every 2 seconds while running
+        time.sleep(2)
+        st.rerun()
     elif progress and progress.get("status") in ("finished", "error", "cancelled"):
         _render_progress_summary(progress)
         st.divider()
@@ -264,49 +267,58 @@ def render_scraper_tab():
 
 
 def _render_progress(p: dict):
-    """Render the live progress dashboard."""
-    st.subheader("Scraper en cours")
-
+    """Render the live progress dashboard with phase tracking."""
     job_label = JOB_TYPE_LABELS.get(p["job_type"], p["job_type"])
-    status_color = "\U0001f7e2" if p["status"] == "running" else "\U0001f534"
 
-    st.markdown(f"### {status_color} {job_label}")
+    st.markdown(f"### \U0001f7e2 {job_label} en cours...")
+
+    # Phase indicator
+    phase = p.get("phase", "")
+    phase_num = p.get("phase_number", 0)
+    phase_total = p.get("phase_total", 0)
+
+    if phase and phase_num and phase_total:
+        st.markdown(f"**Etape {phase_num}/{phase_total} :** {phase}")
+
+        # Phase steps visualization
+        _PHASE_LABELS = [
+            "Decouverte des tribunaux",
+            "Encheres a venir",
+            "Backfill details",
+            "Backfill mises a prix",
+            "Backfill surfaces",
+        ]
+        cols = st.columns(phase_total)
+        for i, col in enumerate(cols):
+            step = i + 1
+            label = _PHASE_LABELS[i] if i < len(_PHASE_LABELS) else f"Etape {step}"
+            if step < phase_num:
+                col.markdown(f"~~{step}. {label}~~")
+            elif step == phase_num:
+                col.markdown(f"**{step}. {label}**")
+            else:
+                col.caption(f"{step}. {label}")
 
     # Progress bar
     pct = p.get("progress_pct", 0)
-    st.progress(min(pct / 100.0, 1.0), text=f"{pct:.1f}%")
+    st.progress(min(pct / 100.0, 1.0), text=f"{pct:.1f}% ({p['processed']:,} / {p['total']:,})")
 
     # KPI cards
     c1, c2, c3, c4 = st.columns(4)
     c1.metric("Temps ecoule", p.get("elapsed_fmt", "\u2014"))
-    c2.metric("Traite", f"{p['processed']:,} / {p['total']:,}")
-    c3.metric("Restant", f"{p['remaining']:,}")
-    c4.metric("Temps restant estime", p.get("eta_fmt", "\u2014"))
-
-    # Secondary stats
-    c5, c6, c7, c8 = st.columns(4)
-    c5.metric("Mis a jour", f"{p['updated']:,}")
-    c6.metric("Non trouves", f"{p.get('not_found', 0):,}")
-    c7.metric("Erreurs", f"{p['errors']:,}")
-    c8.metric("Vitesse", f"{p.get('speed_per_min', 0):.0f} / min")
+    c2.metric("Temps restant estime", p.get("eta_fmt", "\u2014"))
+    c3.metric("Mis a jour", f"{p['updated']:,}")
+    c4.metric("Erreurs", f"{p['errors']:,}")
 
     if p.get("current_item"):
         st.caption(f"En cours : {p['current_item']}")
 
     # Stop button
-    col_stop, col_refresh = st.columns([1, 1])
-    with col_stop:
-        if st.button("Arreter le scraper", type="secondary"):
-            _stop_job()
-            st.warning("Signal d'arret envoye. Le scraper s'arretera apres l'element en cours.")
-            time.sleep(2)
-            st.rerun()
-    with col_refresh:
-        if st.button("Rafraichir", type="primary"):
-            st.rerun()
-
-    # Auto-refresh hint
-    st.caption("Cliquez sur 'Rafraichir' pour mettre a jour la progression.")
+    if st.button("Arreter le scraper", type="secondary"):
+        _stop_job()
+        st.warning("Signal d'arret envoye. Le scraper s'arretera apres l'element en cours.")
+        time.sleep(2)
+        st.rerun()
 
 
 def _render_progress_summary(p: dict):
