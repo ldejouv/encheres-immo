@@ -386,7 +386,7 @@ class ScrapingOrchestrator:
         new_listing_ids: list[int] = []
         errors = 0
 
-        log_id = self.db.start_scrape_log("full")
+        log_id = self.db.start_scrape_log("full_index")
         pw = ProgressWriter("full", total=1)
 
         try:
