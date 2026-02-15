@@ -45,8 +45,18 @@ class ProgressWriter:
         self.not_found = 0
         self.started_at = _now_ts()
         self.current_item = ""
+        self.phase = ""
+        self.phase_number = 0
+        self.phase_total = 0
         # Clear any leftover cancel flag from a previous run
         _clear_cancel_flag()
+        self._flush()
+
+    def set_phase(self, phase: str, phase_number: int = 0, phase_total: int = 0):
+        """Set the current phase label and optionally reset progress."""
+        self.phase = phase
+        self.phase_number = phase_number
+        self.phase_total = phase_total
         self._flush()
 
     def tick(
@@ -108,6 +118,9 @@ class ProgressWriter:
             "eta_seconds": eta_seconds,
             "eta_fmt": _fmt_duration(eta_seconds),
             "current_item": self.current_item,
+            "phase": self.phase,
+            "phase_number": self.phase_number,
+            "phase_total": self.phase_total,
             "error_message": error_message,
         }
         _PROGRESS_DIR.mkdir(parents=True, exist_ok=True)
