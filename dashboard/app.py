@@ -41,11 +41,9 @@ st.sidebar.markdown(
 st.sidebar.markdown("---")
 
 _NAV_ITEMS = {
-    "Encheres a venir":   "\U0001f4c5",
-    "Analyse historique":  "\U0001f4ca",
-    "Carte des biens":     "\U0001f5fa\ufe0f",
-    "Alertes":             "\U0001f514",
-    "Saisie resultats":    "\u270f\ufe0f",
+    "Vue d'ensemble":      "\U0001f4ca",
+    "Encheres a venir":    "\U0001f3e0",
+    "Analyse historique":  "\U0001f4c8",
     "Administration":      "\u2699\ufe0f",
 }
 
@@ -55,19 +53,27 @@ page = st.sidebar.radio(
     format_func=lambda p: f"{_NAV_ITEMS[p]}  {p}",
 )
 
+# ── Sidebar footer: DB stats ─────────────────────────────────────
 try:
-    if page == "Encheres a venir":
+    from analysis.metrics import AuctionMetrics
+    _stats = AuctionMetrics().global_stats()
+    st.sidebar.markdown("---")
+    st.sidebar.caption(f"{_stats.get('total', 0):,} annonces en base")
+    if _stats.get("upcoming"):
+        st.sidebar.caption(f"{_stats['upcoming']:,} encheres a venir")
+except Exception:
+    pass
+
+# ── Page routing ─────────────────────────────────────────────────
+try:
+    if page == "Vue d'ensemble":
+        from dashboard.views.overview import render
+    elif page == "Encheres a venir":
         from dashboard.views.upcoming import render
     elif page == "Analyse historique":
         from dashboard.views.history import render
-    elif page == "Carte des biens":
-        from dashboard.views.map_view import render
-    elif page == "Alertes":
-        from dashboard.views.alerts import render
-    elif page == "Saisie resultats":
-        from dashboard.views.results_entry import render
     elif page == "Administration":
-        from dashboard.views.scraper_admin import render
+        from dashboard.views.admin import render
 
     render()
 except Exception as e:

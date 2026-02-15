@@ -139,7 +139,13 @@ def _get_db_stats() -> dict:
 # ── Main render ──────────────────────────────────────────────────────
 
 def render():
-    st.header("Administration du scraper")
+    """Legacy entry point — redirects to admin.py composite page."""
+    from dashboard.views.admin import render as render_admin
+    render_admin()
+
+
+def render_scraper_tab():
+    st.subheader("Scraper")
 
     # ── DB Stats overview ────────────────────────────────────────────
     stats = _get_db_stats()
