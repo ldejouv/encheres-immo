@@ -1,7 +1,7 @@
 """Shared progress tracker for scraping jobs.
 
 Writes/reads a JSON file so that the dashboard (Streamlit)
-can monitor a scraper running in a separate process.
+can monitor a scraper running in a separate process or thread.
 """
 
 from __future__ import annotations
@@ -15,6 +15,10 @@ from typing import Optional
 _PROGRESS_DIR = Path(__file__).resolve().parent.parent / "data"
 _PROGRESS_FILE = _PROGRESS_DIR / "scrape_progress.json"
 _CANCEL_FILE = _PROGRESS_DIR / "scrape_cancel.flag"
+
+# If progress file hasn't been updated in this many seconds, consider
+# the scraper thread dead (crashed without calling finish/abort).
+_STALE_TIMEOUT = 120
 
 
 def _now_ts() -> float:
@@ -95,7 +99,8 @@ class ProgressWriter:
         return _CANCEL_FILE.exists()
 
     def _flush(self, status: str = "running", error_message: str = ""):
-        elapsed = _now_ts() - self.started_at
+        now = _now_ts()
+        elapsed = now - self.started_at
         remaining = self.total - self.processed
         speed = self.processed / elapsed if elapsed > 0 else 0
         eta_seconds = remaining / speed if speed > 0 else 0
@@ -105,6 +110,7 @@ class ProgressWriter:
             "status": status,
             "pid": os.getpid(),
             "started_at": self.started_at,
+            "last_flush_ts": now,
             "elapsed_seconds": elapsed,
             "elapsed_fmt": _fmt_duration(elapsed),
             "total": self.total,
@@ -127,6 +133,46 @@ class ProgressWriter:
         tmp = _PROGRESS_FILE.with_suffix(".tmp")
         tmp.write_text(json.dumps(data, ensure_ascii=False), encoding="utf-8")
         tmp.replace(_PROGRESS_FILE)
+
+
+# ── Initializer (called synchronously before launching thread) ─────
+
+def init_progress(job_type: str):
+    """Write an initial progress file so the UI sees it immediately.
+
+    Called from the main Streamlit thread *before* starting the
+    background scraper thread.  The ProgressWriter created inside the
+    thread will overwrite this with richer data once it starts.
+    """
+    _clear_cancel_flag()
+    data = {
+        "job_type": job_type,
+        "status": "running",
+        "pid": os.getpid(),
+        "started_at": _now_ts(),
+        "last_flush_ts": _now_ts(),
+        "elapsed_seconds": 0,
+        "elapsed_fmt": "0s",
+        "total": 0,
+        "processed": 0,
+        "updated": 0,
+        "errors": 0,
+        "not_found": 0,
+        "remaining": 0,
+        "progress_pct": 0,
+        "speed_per_min": 0,
+        "eta_seconds": 0,
+        "eta_fmt": "\u2014",
+        "current_item": "Demarrage...",
+        "phase": "Initialisation",
+        "phase_number": 0,
+        "phase_total": 0,
+        "error_message": "",
+    }
+    _PROGRESS_DIR.mkdir(parents=True, exist_ok=True)
+    tmp = _PROGRESS_FILE.with_suffix(".tmp")
+    tmp.write_text(json.dumps(data, ensure_ascii=False), encoding="utf-8")
+    tmp.replace(_PROGRESS_FILE)
 
 
 # ── Reader (used by Streamlit dashboard) ────────────────────────────
@@ -153,19 +199,21 @@ def read_progress() -> Optional[dict]:
 
 
 def is_job_running() -> bool:
-    """Check if a scraper job is currently running."""
+    """Check if a scraper job is currently running.
+
+    Uses the progress file status + a staleness check.
+    Since the scraper runs as a daemon thread (same PID as Streamlit),
+    we cannot use os.kill(pid, 0) — it would always succeed.
+    Instead we check last_flush_ts: if it hasn't been updated in
+    _STALE_TIMEOUT seconds, the thread likely crashed.
+    """
     data = read_progress()
     if not data or data.get("status") != "running":
         return False
-    # Check if the process is actually alive
-    pid = data.get("pid")
-    if pid:
-        try:
-            os.kill(pid, 0)
-            return True
-        except OSError:
-            return False
-    return False
+    last_flush = data.get("last_flush_ts", 0)
+    if last_flush and (_now_ts() - last_flush) > _STALE_TIMEOUT:
+        return False
+    return True
 
 
 def clear_progress():

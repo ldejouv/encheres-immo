@@ -12,7 +12,7 @@ import streamlit as st
 
 from db.database import Database
 from scraper.orchestrator import ScrapingOrchestrator
-from scraper.progress import read_progress, is_job_running, clear_progress, request_cancel
+from scraper.progress import read_progress, is_job_running, clear_progress, request_cancel, init_progress
 
 _PROJECT_ROOT = str(Path(__file__).resolve().parent.parent.parent)
 
@@ -60,7 +60,11 @@ JOBS = {
 
 def _launch_job(mode: str, limit: int | None = None):
     """Launch a scraper job in a background thread (works on Streamlit Cloud)."""
-    clear_progress()
+    # Write progress file SYNCHRONOUSLY so the UI sees it on the next rerun.
+    # Previously clear_progress() deleted the file, causing a race condition
+    # where st.rerun() would fire before the thread had written anything.
+    init_progress(mode)
+
     logging.basicConfig(
         level=logging.INFO,
         format="%(asctime)s %(name)s %(levelname)s %(message)s",
@@ -88,6 +92,8 @@ def _launch_job(mode: str, limit: int | None = None):
 
     thread = threading.Thread(target=_run, daemon=True)
     thread.start()
+    # Store thread reference for additional liveness checking
+    st.session_state["_scraper_thread"] = thread
 
 
 def _stop_job():
@@ -178,6 +184,12 @@ def render_scraper_tab():
     # ── Live progress monitor ────────────────────────────────────────
     progress = read_progress()
     running = is_job_running()
+
+    # Additional thread liveness check: if the thread object is available
+    # and has died, but the progress file still says "running", mark stale.
+    thread = st.session_state.get("_scraper_thread")
+    if running and thread is not None and not thread.is_alive():
+        running = False
 
     if running and progress:
         _render_progress(progress)
